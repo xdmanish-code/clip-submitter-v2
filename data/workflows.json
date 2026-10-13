@@ -1,0 +1,178 @@
+[
+  {
+    "id": "wf_fceea777-4",
+    "workspaceId": "default",
+    "name": "E2E Recorded Submission Flow",
+    "description": "End to end test workflow",
+    "version": 1,
+    "status": "draft",
+    "createdAt": "2026-10-11T16:35:50.673Z",
+    "updatedAt": "2026-10-11T16:35:50.673Z",
+    "steps": [
+      {
+        "stepId": "step_a3f74d5c",
+        "actionType": "navigate",
+        "locator": null,
+        "value": "http://127.0.0.1:52060/",
+        "timeout": 15000,
+        "enabled": true,
+        "comment": "Navigate to http://127.0.0.1:52060/",
+        "failurePolicy": "stop"
+      },
+      {
+        "stepId": "step_ffbbc4ab",
+        "actionType": "click",
+        "locator": {
+          "primary": "[data-testid=\"target-submit-btn\"]",
+          "role": "button",
+          "accessibleName": "Submit Reel",
+          "testId": "target-submit-btn",
+          "id": "btn-submit",
+          "name": null,
+          "css": "[data-testid=\"target-submit-btn\"]",
+          "text": "Submit Reel",
+          "fallbackCoordinates": {
+            "x": 52,
+            "y": 90
+          }
+        },
+        "value": null,
+        "timeout": 5000,
+        "enabled": true,
+        "comment": "",
+        "failurePolicy": "stop"
+      },
+      {
+        "stepId": "step_5ac1a48e",
+        "actionType": "type_text",
+        "locator": {
+          "primary": "#reel-title",
+          "role": "input",
+          "accessibleName": null,
+          "testId": null,
+          "id": "reel-title",
+          "name": "reel_title",
+          "css": "#reel-title",
+          "text": null,
+          "fallbackCoordinates": {
+            "x": 135,
+            "y": 111
+          }
+        },
+        "value": "Viral Clip Reel #101",
+        "timeout": 5000,
+        "enabled": true,
+        "comment": "",
+        "failurePolicy": "stop"
+      },
+      {
+        "stepId": "step_bf41edcf",
+        "actionType": "select_option",
+        "locator": {
+          "primary": "role=\"select\"[name=\"Instagram\nKick\nYouTube\"]",
+          "role": "select",
+          "accessibleName": "Instagram\nKick\nYouTube",
+          "testId": null,
+          "id": "reel-category",
+          "name": "platform",
+          "css": "#reel-category",
+          "text": "Instagram\nKick\nYouTube",
+          "fallbackCoordinates": {
+            "x": 333,
+            "y": 111
+          }
+        },
+        "value": "kick",
+        "timeout": 5000,
+        "enabled": true,
+        "comment": "",
+        "failurePolicy": "stop"
+      },
+      {
+        "stepId": "step_11820225",
+        "actionType": "press_key",
+        "locator": {
+          "primary": "#reel-title",
+          "role": "input",
+          "accessibleName": null,
+          "testId": null,
+          "id": "reel-title",
+          "name": "reel_title",
+          "css": "#reel-title",
+          "text": null,
+          "fallbackCoordinates": {
+            "x": 135,
+            "y": 111
+          }
+        },
+        "value": "Enter",
+        "timeout": 5000,
+        "enabled": true,
+        "comment": "",
+        "failurePolicy": "stop"
+      },
+      {
+        "stepId": "step_d7c8ffed",
+        "actionType": "type_text",
+        "locator": {
+          "primary": "#reel-title",
+          "role": "input",
+          "accessibleName": null,
+          "testId": null,
+          "id": "reel-title",
+          "name": "reel_title",
+          "css": "#reel-title",
+          "text": null,
+          "fallbackCoordinates": {
+            "x": 135,
+            "y": 111
+          }
+        },
+        "value": "Viral Clip Reel #101",
+        "timeout": 5000,
+        "enabled": true,
+        "comment": "",
+        "failurePolicy": "stop"
+      },
+      {
+        "stepId": "step_69b78236",
+        "actionType": "type_text",
+        "locator": {
+          "primary": "#user-password",
+          "role": "input",
+          "accessibleName": null,
+          "testId": null,
+          "id": "user-password",
+          "name": "password",
+          "css": "#user-password",
+          "text": null,
+          "fallbackCoordinates": {
+            "x": 536,
+            "y": 111
+          }
+        },
+        "value": "[REDACTED_SENSITIVE]",
+        "timeout": 5000,
+        "enabled": true,
+        "comment": "Sensitive field (value redacted)",
+        "failurePolicy": "stop"
+      },
+      {
+        "stepId": "step_80d7fc9f",
+        "actionType": "navigate",
+        "locator": null,
+        "value": "http://127.0.0.1:52060/page2",
+        "timeout": 15000,
+        "enabled": true,
+        "comment": "Navigate to http://127.0.0.1:52060/page2",
+        "failurePolicy": "stop"
+      }
+    ],
+    "requiredVariables": [],
+    "settings": {
+      "stepTimeoutMs": 15000,
+      "failurePolicy": "stop",
+      "screenshotOnFailure": false
+    }
+  }
+]

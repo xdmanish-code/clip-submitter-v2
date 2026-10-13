@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clip Submitter V2</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app" class="app-layout">
+    <!-- TOP NAVIGATION -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 11a9 9 0 0 1 9 9"></path>
+            <path d="M4 4a16 16 0 0 1 16 16"></path>
+            <circle cx="5" cy="19" r="1"></circle>
+          </svg>
+        </div>
+        <div class="brand-title">
+          <h1>Clip Submitter <span class="version-tag">V2</span></h1>
+          <p class="brand-subtitle">Automated Cross-Platform Sync</p>
+        </div>
+      </div>
+
+      <nav class="header-nav">
+        <button id="navDashboard" class="nav-tab active" onclick="switchView('dashboard')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          Dashboard
+        </button>
+        <button id="navHistory" class="nav-tab" onclick="switchView('history')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          History
+        </button>
+        <button id="navWorkflowBuilder" class="nav-tab" onclick="switchView('workflow-builder')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+          Workflow Builder
+        </button>
+        <button id="navSetup" class="nav-tab" onclick="switchView('setup')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Agent Setup
+        </button>
+      </nav>
+
+      <div class="header-status">
+        <div id="agentStatusBadge" class="status-indicator offline">
+          <span class="pulse-dot"></span>
+          <span id="agentStatusText">Agent Offline</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- AGENT OFFLINE BANNER -->
+    <div id="agentOfflineAlert" class="alert-banner warning">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-body">
+        <strong>Desktop Agent Not Connected</strong> — To perform browser automation, start the local agent on your machine.
+      </div>
+      <div class="alert-action">
+        <button class="btn btn-sm btn-outline" onclick="switchView('setup')">View Instructions</button>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="app-main">
+      
+      <!-- ===================================== -->
+      <!-- VIEW: DASHBOARD -->
+      <!-- ===================================== -->
+      <section id="viewDashboard" class="view-panel active">
+        
+        <!-- TOP GRID: SUBMISSION TYPES & BROWSER CONFIG -->
+        <div class="dashboard-grid">
+          
+          <!-- 1. SUBMISSION TYPE CARD -->
+          <div class="card card-section">
+            <div class="card-header">
+              <div class="step-num">1</div>
+              <div>
+                <h2>Submission Type</h2>
+                <p class="section-desc">Select target automation pipeline</p>
+              </div>
+            </div>
+
+            <div class="submission-cards">
+              <!-- DUAL SUBMISSION -->
+              <div class="type-card selected" id="typeDualCard" onclick="selectSubmissionType('dual')">
+                <div class="type-card-top">
+                  <div class="type-title">Dual Submission</div>
+                  <span class="badge badge-success">Active</span>
+                </div>
+                <div class="type-subtitle">Cleanframe → Discord (/submit)</div>
+                <p class="type-desc">Scans pending reels, submits to Discord <code>/submit Instagram</code> with Clipper/Editor, and syncs status.</p>
+              </div>
+
+              <!-- KICK SUBMISSION -->
+              <div class="type-card" id="typeKickCard" onclick="selectSubmissionType('kick')">
+                <div class="type-card-top">
+                  <div class="type-title">Kick Submission</div>
+                  <span class="badge badge-success">Active</span>
+                </div>
+                <div class="type-subtitle">Kick Discord Channel (/&lt;creator&gt; links)</div>
+                <p class="type-desc">Select existing reels, map Creator names, and execute dynamic <code>/&lt;creator&gt; links</code> commands directly in Discord.</p>
+              </div>
+
+              <!-- CLIPSTER SUBMISSION -->
+              <div class="type-card disabled" id="typeClipsterCard" onclick="selectSubmissionType('clipster')">
+                <div class="type-card-top">
+                  <div class="type-title">Clipster Submission</div>
+                  <span class="badge badge-muted">Coming Soon</span>
+                </div>
+                <div class="type-subtitle">Clipster Pipeline</div>
+                <p class="type-desc">Clipster submission automation is not configured yet.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. BROWSER SELECTION & MANAGEMENT -->
+          <div class="card card-section">
+            <div class="card-header">
+              <div class="step-num">2</div>
+              <div>
+                <h2>Browser Selection</h2>
+                <p class="section-desc">Configure automation browser profile</p>
+              </div>
+            </div>
+
+            <!-- Browser Mode Switcher -->
+            <div class="tab-pill-group">
+              <button id="tabExistingBrowser" class="tab-pill active" onclick="setBrowserMode('existing')">
+                Existing Browser Profile (CDP)
+              </button>
+              <button id="tabNewChromium" class="tab-pill" onclick="setBrowserMode('new')">
+                Launch New Chromium
+              </button>
+            </div>
+
+            <!-- EXISTING BROWSER SETTINGS -->
+            <div id="sectionExistingBrowser" class="browser-mode-form active">
+              <div class="form-group">
+                <label for="browserTypeSelect">Browser Type</label>
+                <select id="browserTypeSelect" class="form-input">
+                  <option value="chrome">Google Chrome</option>
+                  <option value="chromium">Chromium</option>
+                  <option value="edge">Microsoft Edge</option>
+                  <option value="brave">Brave Browser</option>
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="browserHost">Host</label>
+                  <input type="text" id="browserHost" class="form-input" value="127.0.0.1">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="browserPort">Remote Debugging Port</label>
+                  <input type="number" id="browserPort" class="form-input" value="9222">
+                </div>
+              </div>
+
+              <div class="info-box">
+                <div class="info-title">💡 How to start your browser with Remote Debugging:</div>
+                <code>chrome.exe --remote-debugging-port=9222 --user-data-dir="%LOCALAPPDATA%\ClipSubmitterChrome"</code>
+              </div>
+            </div>
+
+            <!-- NEW CHROMIUM SETTINGS -->
+            <div id="sectionNewChromium" class="browser-mode-form">
+              <div class="form-group">
+                <label for="newProfileName">Profile Name</label>
+                <input type="text" id="newProfileName" class="form-input" value="profile-1">
+              </div>
+
+              <div class="form-group">
+                <label for="customExecPath">Browser Executable Path (Optional)</label>
+                <input type="text" id="customExecPath" class="form-input" placeholder="e.g. C:\Program Files\Google\Chrome\Application\chrome.exe">
+              </div>
+
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="chkHeadless">
+                <label for="chkHeadless">Run headless (without visible window)</label>
+              </div>
+            </div>
+
+            <!-- Test Connection Button -->
+            <div class="browser-action-row">
+              <button id="btnTestBrowser" class="btn btn-secondary" onclick="testBrowserConnection()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                Test Browser Connection
+              </button>
+              <div id="browserTestFeedback" class="test-feedback"></div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- 3A. DUAL SUBMISSION PANEL -->
+        <div id="panelDualSubmission" class="card job-config-card">
+          <div class="card-header flex-between">
+            <div class="flex-align">
+              <div class="step-num">3</div>
+              <div>
+                <h2>Dual Submission — Cleanframe to Discord</h2>
+                <p class="section-desc">Verify dashboard endpoints and load pending reels</p>
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              <button id="btnLoadQueue" class="btn btn-primary" onclick="loadQueuePreview()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                Load Pending Clips
+              </button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="inputWebsiteUrl">Cleanframe URL</label>
+              <input type="url" id="inputWebsiteUrl" class="form-input" placeholder="https://your-cleanframe-instance.workers.dev">
+            </div>
+            <div class="form-group flex-1">
+              <label for="inputDiscordUrl">Dual Discord Channel URL</label>
+              <input type="url" id="inputDiscordUrl" class="form-input" placeholder="https://discord.com/channels/YOUR_SERVER_ID/YOUR_CHANNEL_ID">
+            </div>
+          </div>
+
+          <!-- DUAL QUEUE PREVIEW TABLE -->
+          <div id="queuePreviewSection" class="queue-preview-section">
+            <div class="table-header-row">
+              <h3>Pending Clips Preview (<span id="queueCountLabel">0</span>)</h3>
+              <button id="btnStartJob" class="btn btn-success" onclick="startDualJob()" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Start Dual Submission
+              </button>
+            </div>
+
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 45px;">#</th>
+                    <th>Instagram Link</th>
+                    <th>Clipper</th>
+                    <th>Editor</th>
+                    <th>Caption Preview</th>
+                    <th>State</th>
+                  </tr>
+                </thead>
+                <tbody id="queueTableBody">
+                  <tr class="empty-row">
+                    <td colspan="6">No pending clips loaded yet. Click <strong>"Load Pending Clips"</strong>.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3B. KICK SUBMISSION PANEL (USES SAME REELS, NO PDF) -->
+        <div id="panelKickSubmission" class="card job-config-card" style="display: none;">
+          <div class="card-header flex-between">
+            <div class="flex-align">
+              <div class="step-num">3</div>
+              <div>
+                <h2>Kick Submission — Reel Selection & Creator Setup</h2>
+                <p class="section-desc">Select existing reels and submit to Kick Discord bot</p>
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              <button id="btnLoadKickQueue" class="btn btn-primary" onclick="loadQueuePreview()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                Load Pending Clips
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="inputKickDiscordUrl">Kick Discord Channel URL (Clipping #commands)</label>
+            <input type="url" id="inputKickDiscordUrl" class="form-input" placeholder="https://discord.com/channels/YOUR_SERVER_ID/YOUR_CHANNEL_ID">
+          </div>
+
+          <!-- BULK CREATOR ASSIGNMENT TOOLBAR -->
+          <div id="kickBulkAssignBar" class="bulk-assign-bar" style="display: none;">
+            <div class="bulk-bar-left">
+              <span class="selected-pill"><span id="kickSelectedCount">0</span> reels selected</span>
+              <button class="btn btn-xs btn-outline" onclick="selectMissingKickRows()">
+                Select All Missing (<span id="btnMissingCountBadge">0</span>)
+              </button>
+              <button class="btn btn-xs btn-outline" onclick="clearKickSelection()">
+                Clear Selection
+              </button>
+            </div>
+            
+            <div class="bulk-bar-right">
+              <input type="text" id="manualCreatorInput" class="form-input form-input-sm" placeholder="Enter Creator Name (e.g. N3on)...">
+              <button id="btnApplyCreator" class="btn btn-sm btn-primary" onclick="applyManualCreator()">
+                Assign Creator
+              </button>
+            </div>
+          </div>
+
+          <!-- VALIDATION WARNING BANNER -->
+          <div id="kickValidationWarning" class="alert-banner warning" style="display: none; margin: 12px 0;">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-body" id="kickValidationWarningText">
+              4 reels are missing a Creator. Assign a Creator before starting.
+            </div>
+            <div class="alert-action">
+              <button class="btn btn-sm btn-outline" onclick="selectMissingKickRows()">Select Missing Reels</button>
+            </div>
+          </div>
+
+          <!-- KICK QUEUE PREVIEW TABLE -->
+          <div id="kickQueueSection" class="queue-preview-section">
+            <div class="table-header-row">
+              <h3>Available Reels (<span id="kickQueueCountLabel">0</span>)</h3>
+              <button id="btnStartKickJob" class="btn btn-success" onclick="startKickJob()" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                START KICK SUBMISSION
+              </button>
+            </div>
+
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 36px; text-align: center;">
+                      <input type="checkbox" id="chkSelectAllKick" onchange="toggleSelectAllKick(this.checked)" title="Select All">
+                    </th>
+                    <th style="width: 45px;">#</th>
+                    <th>Reel / Clip URL</th>
+                    <th>Creator</th>
+                    <th>Slash Command</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="kickQueueTableBody">
+                  <tr class="empty-row">
+                    <td colspan="6">No reels loaded yet. Click <strong>"Load Pending Clips"</strong> to fetch available reels.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 4. ACTIVE JOB EXECUTION MONITOR -->
+        <div id="activeJobSection" class="card active-job-card" style="display: none;">
+          <div class="card-header flex-between">
+            <div class="flex-align">
+              <div class="pulse-indicator active"></div>
+              <div>
+                <h2>Active Job Execution <span id="activeJobIdBadge" class="badge badge-accent">#0000</span> <span id="activeJobTypeBadge" class="badge badge-success">DUAL</span></h2>
+                <p id="activeJobCurrentStep" class="current-step-label">Initializing...</p>
+              </div>
+            </div>
+
+            <button id="btnCancelJob" class="btn btn-danger" onclick="cancelActiveJob()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+              Stop Job
+            </button>
+          </div>
+
+          <!-- PROGRESS BAR -->
+          <div class="progress-container">
+            <div class="progress-labels">
+              <span id="progressText">Progress: 0 / 0 clips</span>
+              <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar-track">
+              <div id="progressBarFill" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- CURRENT CLIP HERO CARD -->
+          <div id="currentClipHero" class="current-clip-hero">
+            <div class="clip-hero-item">
+              <div class="clip-hero-label" id="heroLabelTarget">Target Reel</div>
+              <div id="heroInstagram" class="clip-hero-value font-mono">--</div>
+            </div>
+            <div class="clip-hero-item">
+              <div class="clip-hero-label" id="heroLabelEntity1">Creator / Clipper</div>
+              <div id="heroClipper" class="clip-hero-value">--</div>
+            </div>
+            <div class="clip-hero-item">
+              <div class="clip-hero-label" id="heroLabelEntity2">Slash Command / Editor</div>
+              <div id="heroEditor" class="clip-hero-value">--</div>
+            </div>
+          </div>
+
+          <!-- LIVE LOG SECTION -->
+          <div class="logs-container">
+            <div class="logs-header flex-between">
+              <span class="logs-title">⚡ Live Automation Log</span>
+              <button class="btn btn-xs btn-outline" onclick="clearLiveLogs()">Clear</button>
+            </div>
+            <div id="liveLogsBox" class="logs-box"></div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ===================================== -->
+      <!-- VIEW: HISTORY -->
+      <!-- ===================================== -->
+      <section id="viewHistory" class="view-panel">
+        <div class="card">
+          <div class="card-header flex-between">
+            <div>
+              <h2>Submission History</h2>
+              <p class="section-desc">Audit log of all executed automation jobs</p>
+            </div>
+            <button class="btn btn-secondary" onclick="loadHistory()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+              Refresh
+            </button>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Type</th>
+                  <th>Total</th>
+                  <th>Success</th>
+                  <th>Already Sub.</th>
+                  <th>Failed / Skip</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <tr class="empty-row">
+                  <td colspan="9">No submission history found.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================== -->
+      <!-- VIEW: WORKFLOW BUILDER (TEACH MODE) -->
+      <!-- ===================================== -->
+      <section id="viewWorkflowBuilder" class="view-panel">
+        
+        <!-- TOP TOOLBAR CARD: WORKFLOW INFO & RECORDER CONTROLS -->
+        <div class="card card-section">
+          <div class="card-header flex-between">
+            <div class="flex-align">
+              <div class="step-num">⚡</div>
+              <div>
+                <h2>Teach Mode — Browser Action Recorder</h2>
+                <p class="section-desc">Record browser actions in a designated automation session, edit steps, and save reusable workflow templates</p>
+              </div>
+            </div>
+            
+            <div class="header-status">
+              <div id="recorderStatusIndicator" class="status-indicator offline">
+                <span class="pulse-dot"></span>
+                <span id="recorderStatusText">Recorder Idle</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- WORKFLOW META CONFIG -->
+          <div class="form-row" style="margin-top: 15px;">
+            <div class="form-group flex-2">
+              <label for="workflowNameInput">Workflow Name</label>
+              <input type="text" id="workflowNameInput" class="form-input" placeholder="e.g. Custom Submission Flow">
+            </div>
+            <div class="form-group flex-2">
+              <label for="workflowDescInput">Description (Optional)</label>
+              <input type="text" id="workflowDescInput" class="form-input" placeholder="e.g. Navigates, fills form, attaches reel link">
+            </div>
+            <div class="form-group flex-1">
+              <label for="workflowTemplateSelect">Saved Templates</label>
+              <select id="workflowTemplateSelect" class="form-input" onchange="loadSelectedWorkflow(this.value)">
+                <option value="">-- New Workflow --</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- RECORDER CONTROLS BAR -->
+          <div class="recorder-controls-bar">
+            <div class="recorder-btn-group">
+              <button id="btnStartRecording" class="btn btn-primary" onclick="startRecorderSession()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+                Start Recording
+              </button>
+              <button id="btnPauseRecording" class="btn btn-secondary" onclick="pauseRecorderSession()" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                Pause
+              </button>
+              <button id="btnResumeRecording" class="btn btn-primary" onclick="resumeRecorderSession()" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Resume
+              </button>
+              <button id="btnStopRecording" class="btn btn-danger" onclick="stopRecorderSession()" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                Stop Recording
+              </button>
+            </div>
+
+            <div class="recorder-btn-group">
+              <button class="btn btn-outline" onclick="openStepEditModal(null)">
+                + Add Step
+              </button>
+              <button class="btn btn-outline" onclick="promptAddWaitStep()">
+                + Wait Step
+              </button>
+              <button class="btn btn-outline" onclick="promptAddCommentStep()">
+                + Comment
+              </button>
+              <button id="btnValidateWorkflow" class="btn btn-outline" onclick="runPreflightValidation()">
+                ✓ Validate Preflight
+              </button>
+              <button id="btnSaveWorkflowDraft" class="btn btn-success" onclick="saveCurrentWorkflowDraft()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Draft
+              </button>
+              <button id="btnPublishWorkflow" class="btn btn-secondary" onclick="publishCurrentWorkflow()">
+                Publish Version
+              </button>
+              <button id="btnTestWorkflowExecution" class="btn btn-primary" onclick="openTestExecutionModal()" title="Run safe single-item test">
+                ▶ Test Run (1 Item)
+              </button>
+              <button id="btnOpenBatchExecution" class="btn btn-success" onclick="openBatchExecutionModal()" title="Execute workflow against batch queue">
+                ⚡ Batch Execution
+              </button>
+            </div>
+          </div>
+
+          <!-- SENSITIVE INPUT WARNING BANNER -->
+          <div id="recorderSensitiveAlert" class="alert-banner warning" style="display: none; margin-top: 15px;">
+            <div class="alert-icon">🔒</div>
+            <div class="alert-body">
+              <strong>Sensitive Input Protected:</strong> Passwords or authentication tokens entered during recording are automatically redacted to <code>[REDACTED_SENSITIVE]</code>.
+            </div>
+          </div>
+
+          <!-- PRE-FLIGHT VALIDATION BANNER -->
+          <div id="workflowValidationBanner" class="alert-banner" style="display: none; margin-top: 15px;">
+            <div class="alert-icon" id="validationBannerIcon">⚠️</div>
+            <div class="alert-body" id="validationBannerBody"></div>
+          </div>
+
+          <!-- RECORDER STATUS / ERROR FEEDBACK -->
+          <div id="recorderFeedback" class="test-feedback" style="margin-top: 10px;"></div>
+        </div>
+
+        <!-- RECORDED STEPS LIST CARD -->
+        <div class="card job-config-card" style="margin-top: 20px;">
+          <div class="card-header flex-between">
+            <div class="flex-align">
+              <div class="step-num">📋</div>
+              <div>
+                <h2>Workflow Steps (<span id="recordedStepsCount">0</span>)</h2>
+                <p class="section-desc">Visual sequence of actions — reorder, configure, duplicate, or toggle enabled/disabled</p>
+              </div>
+            </div>
+            <div class="flex-align" style="gap: 8px;">
+              <button class="btn btn-xs btn-outline" onclick="openStepEditModal(null)">+ Add New Step</button>
+              <button class="btn btn-xs btn-outline" onclick="clearRecordedSteps()">Clear All</button>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px; text-align: center;">On</th>
+                  <th style="width: 35px;">#</th>
+                  <th style="width: 130px;">Action Type</th>
+                  <th>Target / Locator</th>
+                  <th>Value / Variable</th>
+                  <th style="width: 80px;">Timeout</th>
+                  <th style="width: 90px;">Policy</th>
+                  <th>Notes</th>
+                  <th style="width: 170px; text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="recordedStepsTableBody">
+                <tr class="empty-row">
+                  <td colspan="9">No steps yet. Start recording or click <strong>"+ Add Step"</strong> to create actions.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ===================================== -->
+      <!-- VIEW: AGENT SETUP & DIAGNOSTICS -->
+      <!-- ===================================== -->
+      <section id="viewSetup" class="view-panel">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Local Agent Setup Guide</h2>
+              <p class="section-desc">Run automation safely on your local desktop</p>
+            </div>
+          </div>
+
+          <div class="setup-grid">
+            <div class="setup-step">
+              <div class="setup-step-header">
+                <span class="step-badge">Step 1</span>
+                <h3>Start Browser with Remote Debugging (Port 9222)</h3>
+              </div>
+              <p>Run the command for your operating system to launch a dedicated automation browser profile:</p>
+              <div style="margin-top: 8px;">
+                <div class="text-sm" style="font-weight: 600; margin-bottom: 4px; color: var(--text-secondary);">Windows (PowerShell):</div>
+                <div class="code-block" style="margin-bottom: 8px;">
+                  <code>chrome.exe --remote-debugging-port=9222 --user-data-dir="$env:LOCALAPPDATA\ClipSubmitterChrome"</code>
+                </div>
+                <div class="text-sm" style="font-weight: 600; margin-bottom: 4px; color: var(--text-secondary);">macOS (Terminal):</div>
+                <div class="code-block" style="margin-bottom: 8px;">
+                  <code>/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/Library/Application Support/ClipSubmitterChrome"</code>
+                </div>
+                <div class="text-sm" style="font-weight: 600; margin-bottom: 4px; color: var(--text-secondary);">Linux (Terminal):</div>
+                <div class="code-block">
+                  <code>google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.config/ClipSubmitterChrome"</code>
+                </div>
+              </div>
+              <p class="text-sm text-muted" style="margin-top: 8px;">Log into your target platforms (Discord, Cleanframe, etc.) once in this dedicated automation window. Your sessions are securely preserved locally.</p>
+            </div>
+
+            <div class="setup-step">
+              <div class="setup-step-header">
+                <span class="step-badge">Step 2</span>
+                <h3>Start the Application</h3>
+              </div>
+              <p>In your terminal, navigate to the project directory and run:</p>
+              <div class="code-block" style="margin-bottom: 8px;">
+                <code>npm start</code>
+              </div>
+              <p class="text-sm text-muted"><code>npm start</code> launches both the web dashboard and the local agent together. The agent connects automatically to the dashboard via WebSocket.</p>
+            </div>
+          </div>
+
+          <!-- DETECTED LOCAL BROWSERS -->
+          <div class="detected-browsers-box">
+            <h3>Detected Local Browsers on Agent</h3>
+            <div id="detectedBrowsersList" class="browser-pill-list">
+              <span class="text-muted">Waiting for agent connection...</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- CREATOR OVERRIDE CONFIRMATION MODAL -->
+    <div id="creatorOverrideModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-window" style="max-width: 500px;">
+        <div class="modal-header flex-between">
+          <h3>Confirm Creator Replacement</h3>
+          <button class="btn btn-close" onclick="closeOverrideModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <p id="overrideModalMessage">You are about to replace the Creator for 4 reels. Continue?</p>
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="closeOverrideModal()">Cancel</button>
+            <button class="btn btn-danger" id="btnConfirmOverride" onclick="confirmOverrideCreator()">Replace Creator</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOB DETAIL MODAL -->
+    <div id="jobDetailModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-window">
+        <div class="modal-header flex-between">
+          <h3 id="modalJobTitle">Job Details #0000</h3>
+          <button class="btn btn-close" onclick="closeJobModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-meta-grid" id="modalMetaGrid"></div>
+          <h4>Processed Clips</h4>
+          <div class="table-container modal-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Target Link</th>
+                  <th>Creator / Clipper</th>
+                  <th>Command / Editor</th>
+                  <th>Status</th>
+                  <th>Response / Reason</th>
+                </tr>
+              </thead>
+              <tbody id="modalClipsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+    <!-- STEP EDITOR MODAL -->
+    <div id="stepEditModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-window" style="max-width: 650px;">
+        <div class="modal-header flex-between">
+          <h3 id="stepEditModalTitle">Configure Workflow Step</h3>
+          <button class="btn btn-close" onclick="closeStepEditModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editStepId">
+          
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="editActionType">Action Type *</label>
+              <select id="editActionType" class="form-input" onchange="onActionTypeChange(this.value)">
+                <option value="click">click (Mouse Click)</option>
+                <option value="dblclick">dblclick (Double Click)</option>
+                <option value="type_text">type_text (Enter Text)</option>
+                <option value="select_option">select_option (Select Dropdown)</option>
+                <option value="press_key">press_key (Keyboard Key)</option>
+                <option value="wait">wait (Pause Duration)</option>
+                <option value="navigate">navigate (Go to URL)</option>
+                <option value="comment">comment (Annotation)</option>
+                <option value="verify">verify (Assert Element/Text)</option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label for="editFailurePolicy">Failure Policy</label>
+              <select id="editFailurePolicy" class="form-input">
+                <option value="stop">stop (Halt workflow on failure)</option>
+                <option value="continue">continue (Log warning and proceed)</option>
+                <option value="retry_twice">retry_twice (Retry up to 2 times)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- LOCATOR CONFIGURATION -->
+          <div id="locatorConfigSection" style="margin-top: 10px;">
+            <div class="flex-between" style="margin-bottom: 5px;">
+              <label style="font-weight:600; font-size:0.85rem;">Element Locator</label>
+              <span class="text-muted" style="font-size:0.75rem;">Resolves deterministically in order</span>
+            </div>
+            <div class="form-group">
+              <label for="editLocatorPrimary" style="font-size: 0.75rem;">Primary Selector (CSS / Playwright / Text)</label>
+              <input type="text" id="editLocatorPrimary" class="form-input font-mono" placeholder="e.g. button:has-text('Submit'), #submit-btn, [data-testid='submit']">
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="editLocatorTestId" style="font-size: 0.75rem;">Test ID (data-testid)</label>
+                <input type="text" id="editLocatorTestId" class="form-input font-mono" placeholder="e.g. submit-button">
+              </div>
+              <div class="form-group flex-1">
+                <label for="editLocatorRole" style="font-size: 0.75rem;">Role & Name</label>
+                <div style="display:flex; gap:4px;">
+                  <input type="text" id="editLocatorRole" class="form-input" style="flex:1;" placeholder="role (e.g. button)">
+                  <input type="text" id="editLocatorName" class="form-input" style="flex:1;" placeholder="name (e.g. Submit)">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- VALUE / VARIABLE INPUT -->
+          <div id="valueConfigSection" class="form-group" style="margin-top: 10px;">
+            <div class="flex-between" style="margin-bottom: 5px;">
+              <label for="editStepValue" id="lblStepValue" style="font-weight:600; font-size:0.85rem;">Value / Input Content</label>
+              <div style="display:flex; gap:4px;" id="variableQuickChips">
+                <span class="var-chip" onclick="insertVariableIntoValue('{{reel_url}}')">+ {{reel_url}}</span>
+                <span class="var-chip" onclick="insertVariableIntoValue('{{creator_name}}')">+ {{creator_name}}</span>
+                <span class="var-chip" onclick="insertVariableIntoValue('{{clip_id}}')">+ {{clip_id}}</span>
+                <span class="var-chip" onclick="insertVariableIntoValue('{{campaign_name}}')">+ {{campaign_name}}</span>
+              </div>
+            </div>
+            <input type="text" id="editStepValue" class="form-input font-mono" placeholder="Input text, URL, key name (e.g. Enter), or ms">
+          </div>
+
+          <!-- TIMEOUT & ENABLED -->
+          <div class="form-row" style="margin-top: 10px;">
+            <div class="form-group flex-1">
+              <label for="editStepTimeout" style="font-size: 0.8rem;">Timeout (ms)</label>
+              <input type="number" id="editStepTimeout" class="form-input" value="5000" min="500" step="500">
+            </div>
+            <div class="form-group flex-2">
+              <label for="editStepComment" style="font-size: 0.8rem;">Notes / Comment</label>
+              <input type="text" id="editStepComment" class="form-input" placeholder="Explain what this step does">
+            </div>
+          </div>
+
+          <div class="form-group-checkbox" style="margin-top: 10px;">
+            <input type="checkbox" id="editStepEnabled" checked>
+            <label for="editStepEnabled">Step enabled (uncheck to skip during workflow run)</label>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="closeStepEditModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveStepEditModal()">Apply Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEST EXECUTION (1 ITEM) MODAL -->
+    <div id="testExecutionModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-window" style="max-width: 600px;">
+        <div class="modal-header flex-between">
+          <h3>▶ Safe Test Execution (Single Item)</h3>
+          <button class="btn btn-close" onclick="closeTestExecutionModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="section-desc">Run this workflow against a single test item or local test URL. Execution adheres to pre-flight checks and strict locator safety.</p>
+          
+          <div class="form-group" style="margin-top: 15px;">
+            <label for="testReelUrl">Test Reel URL / Target</label>
+            <input type="text" id="testReelUrl" class="form-input font-mono" value="https://instagram.com/reel/test-preview-12345">
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="testCreatorName">Test Creator</label>
+              <input type="text" id="testCreatorName" class="form-input" value="TestCreator">
+            </div>
+            <div class="form-group flex-1">
+              <label for="testClipId">Test Clip ID</label>
+              <input type="text" id="testClipId" class="form-input" value="CLIP_TEST_001">
+            </div>
+          </div>
+
+          <div class="form-group-checkbox" style="margin-top: 10px;">
+            <input type="checkbox" id="testTakeDiagnostics" checked>
+            <label for="testTakeDiagnostics">Capture privacy-safe diagnostic screenshot if step fails</label>
+          </div>
+
+          <div id="testExecutionFeedback" class="test-feedback" style="margin-top: 15px;"></div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="closeTestExecutionModal()">Cancel</button>
+            <button class="btn btn-success" id="btnExecuteTestItem" onclick="startSingleItemTestExecution()">Start Test Execution</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BATCH WORKFLOW EXECUTION MODAL & QUEUE MONITOR -->
+    <div id="batchExecutionModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-window" style="max-width: 850px;">
+        <div class="modal-header flex-between">
+          <div class="flex-align" style="gap: 10px;">
+            <span class="step-num">⚡</span>
+            <div>
+              <h3>Batch Workflow Queue Execution</h3>
+              <p class="section-desc" style="margin: 0;">Execute active workflow against multiple selected clips with state tracking and duplicate protection</p>
+            </div>
+          </div>
+          <button class="btn btn-close" onclick="closeBatchExecutionModal()">✕</button>
+        </div>
+        <div class="modal-body">
+
+          <!-- BATCH CONTROLS & STATS BAR -->
+          <div class="flex-between" style="background: #182234; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 15px;">
+            <div class="flex-align" style="gap: 12px;">
+              <div>
+                <span class="text-muted" style="font-size:0.75rem; text-transform:uppercase;">Workflow:</span>
+                <strong id="batchWorkflowTitle" style="color:#38bdf8; display:block;">Active Workflow</strong>
+              </div>
+              <div style="border-left: 1px solid #334155; padding-left: 12px;">
+                <span class="text-muted" style="font-size:0.75rem; text-transform:uppercase;">Batch Status:</span>
+                <span id="batchJobStatusBadge" class="badge badge-QUEUED">IDLE</span>
+              </div>
+            </div>
+
+            <div class="recorder-btn-group">
+              <button id="btnStartBatch" class="btn btn-success" onclick="startBatchWorkflowExecution()">
+                ▶ Run Batch
+              </button>
+              <button id="btnPauseBatch" class="btn btn-secondary" onclick="pauseBatchWorkflowExecution()" style="display: none;">
+                ⏸ Pause
+              </button>
+              <button id="btnResumeBatch" class="btn btn-primary" onclick="resumeBatchWorkflowExecution()" style="display: none;">
+                ▶ Resume
+              </button>
+              <button id="btnCancelBatch" class="btn btn-danger" onclick="cancelBatchWorkflowExecution()" style="display: none;">
+                ⏹ Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- SUMMARY PILLS -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+            <span class="badge" style="background:#1e293b;">Total: <strong id="batchCountTotal">0</strong></span>
+            <span class="badge badge-SUCCESS">Success: <strong id="batchCountSuccess">0</strong></span>
+            <span class="badge badge-FAILED">Failed: <strong id="batchCountFailed">0</strong></span>
+            <span class="badge badge-SKIPPED">Skipped: <strong id="batchCountSkipped">0</strong></span>
+            <span class="badge badge-UNCERTAIN" style="background:rgba(234, 179, 8, 0.2); color:#facc15;">Unknown: <strong id="batchCountUnknown">0</strong></span>
+            <span class="badge" style="background:rgba(239, 68, 68, 0.2); color:#f87171;">Cancelled: <strong id="batchCountCancelled">0</strong></span>
+          </div>
+
+          <!-- INPUT QUEUE ITEMS -->
+          <div id="batchInputConfigSection">
+            <div class="form-group">
+              <div class="flex-between">
+                <label for="batchItemsTextarea" style="font-weight: 600; font-size: 0.85rem;">Queue Clips (JSON Array or newline-separated Reel URLs)</label>
+                <button class="btn btn-xs btn-outline" onclick="loadSampleBatchQueue()">Load Sample Items</button>
+              </div>
+              <textarea id="batchItemsTextarea" class="form-input font-mono" rows="6" placeholder='[&#10;  {"reel_url": "https://instagram.com/reel/sample1", "creator_name": "Creator1"},&#10;  {"reel_url": "https://instagram.com/reel/sample2", "creator_name": "Creator2"}&#10;]'></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <div class="form-group-checkbox">
+                  <input type="checkbox" id="chkStopOnFirstFailure">
+                  <label for="chkStopOnFirstFailure">Halt batch immediately on first failed item</label>
+                </div>
+              </div>
+              <div class="form-group flex-1">
+                <div class="form-group-checkbox">
+                  <input type="checkbox" id="chkDeDuplicateBatch" checked>
+                  <label for="chkDeDuplicateBatch">Enforce idempotency & de-duplicate queue</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- LIVE BATCH QUEUE TABLE -->
+          <div class="table-container modal-table" style="max-height: 250px; overflow-y: auto; margin-top: 10px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 35px;">#</th>
+                  <th>Reel / Target</th>
+                  <th>Creator / Variables</th>
+                  <th style="width: 100px;">Status</th>
+                  <th style="width: 60px;">Tries</th>
+                  <th>Failure / Diagnostic Note</th>
+                </tr>
+              </thead>
+              <tbody id="batchQueueTableBody">
+                <tr class="empty-row">
+                  <td colspan="6">No batch queue loaded. Enter clips above and click <strong>"Run Batch"</strong>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="batchFeedback" class="test-feedback" style="margin-top: 12px;"></div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+            <button class="btn btn-secondary" onclick="closeBatchExecutionModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

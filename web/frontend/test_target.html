@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clip Submitter V2 — Safe Local Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 30px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    h1 { color: #38bdf8; }
+    .card {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      background: #0b0f19;
+      border: 1px solid #334155;
+      color: #fff;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    button {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #2563eb; }
+    .output-box {
+      margin-top: 15px;
+      padding: 12px;
+      background: #0f172a;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      font-family: monospace;
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+  <h1>Safe Automation Test Target</h1>
+  <p style="color: #94a3b8;">Use this harmless local page to demonstrate and test recording, single runs, and batch execution.</p>
+
+  <div class="card">
+    <h3>Interactive Form</h3>
+    <div class="form-group">
+      <label for="reel-url-input">Target Reel Link:</label>
+      <input type="text" id="reel-url-input" data-testid="reel-input" placeholder="e.g. https://instagram.com/reel/12345">
+    </div>
+
+    <div class="form-group">
+      <label for="creator-input">Creator / Clipper Name:</label>
+      <input type="text" id="creator-input" data-testid="creator-input" placeholder="e.g. TestCreator">
+    </div>
+
+    <div class="form-group">
+      <label for="platform-select">Platform:</label>
+      <select id="platform-select" data-testid="platform-select">
+        <option value="cleanframe">Cleanframe</option>
+        <option value="kick">Kick</option>
+        <option value="youtube">YouTube</option>
+      </select>
+    </div>
+
+    <button id="btn-submit-test" data-testid="submit-btn" onclick="submitForm()">Submit Test Item</button>
+
+    <div id="output-msg" class="output-box" data-testid="output-box">Status: Ready for input</div>
+  </div>
+
+  <script>
+    function submitForm() {
+      const url = document.getElementById('reel-url-input').value || 'N/A';
+      const creator = document.getElementById('creator-input').value || 'Anonymous';
+      const platform = document.getElementById('platform-select').value;
+      const box = document.getElementById('output-msg');
+      box.textContent = 'Submission Verified: [' + platform + '] ' + url + ' by ' + creator;
+      box.style.borderColor = '#10b981';
+    }
+  </script>
+</body>
+</html>

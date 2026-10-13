@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+package-lock.json.backup
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Backups and archives
+backups/
+*.bak
+*.backup
+
+# Runtime browser profiles and storage
+ClipSubmitterProfiles/
+.clip-submitter/
+
+# User runtime data & test artifacts
+data/history.json
+data/batch_jobs.json
+data/test_*.json
+data/screenshots/*.png
+!data/screenshots/.gitkeep
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tmp
+*.tmp.*
+src/*.tmp
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/

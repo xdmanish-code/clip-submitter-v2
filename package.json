@@ -1,0 +1,29 @@
+{
+  "name": "clip-submitter-v2",
+  "version": "2.0.0",
+  "description": "Cross-platform browser automation platform with Teach Mode visual workflow builder and batch execution",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "start": "node scripts/start.js",
+    "dev": "node scripts/start.js",
+    "check": "node scripts/check.js",
+    "test": "node tests/run-all-tests.js",
+    "web": "node web/backend/server.js",
+    "agent": "node agent/agent.js",
+    "cli": "node src/index.js",
+    "cli:v1": "node src/index.v1-working-backup.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5",
+    "playwright": "^1.55.0",
+    "ws": "^8.22.0"
+  }
+}
