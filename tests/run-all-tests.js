@@ -23,7 +23,9 @@ const testSuites = [
   { name: "Safe Workflow Execution Engine", file: "tests/test_workflow_executor.js", args: ["--test-force-exit"] },
   { name: "Batch Execution & Queue Controls", file: "tests/test_batch_execution.js", args: ["--test-force-exit"] },
   { name: "Dashboard Acceptance & Safety Audit", file: "tests/test_audit_acceptance.js", args: ["--test-force-exit"] },
-  { name: "Real End-to-End Browser Recorder & UI", file: "tests/test_real_e2e_recorder.js", args: ["--test-force-exit"] }
+  { name: "Real End-to-End Browser Recorder & UI", file: "tests/test_real_e2e_recorder.js", args: ["--test-force-exit"] },
+  { name: "Multi-Discord Profiles & Account Routing", file: "tests/test_multi_discord_routing.js", args: ["--test-force-exit"] },
+  { name: "Cleanframe Finalization & Reconciliation", file: "tests/test_cleanframe_finalization.js", args: ["--test-force-exit"] }
 ];
 
 const BOLD = "\x1b[1m";

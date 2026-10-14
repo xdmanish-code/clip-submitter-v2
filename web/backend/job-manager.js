@@ -2,6 +2,7 @@ import { JobStatus, ClipState } from "../../shared/states.js";
 import { HistoryStore } from "./history-store.js";
 import { WorkflowStore } from "./workflow-store.js";
 import { BatchQueueStore } from "../../automation/workflow/batch-queue-store.js";
+import { DiscordProfileStore } from "./discord-profile-store.js";
 import crypto from "crypto";
 
 export class JobManager {
@@ -9,6 +10,7 @@ export class JobManager {
     this.historyStore = new HistoryStore();
     this.workflowStore = new WorkflowStore();
     this.batchStore = new BatchQueueStore();
+    this.profileStore = new DiscordProfileStore();
     this.agentSocket = null;
     this.agentInfo = null;
     this.activeJob = null;
@@ -70,7 +72,9 @@ export class JobManager {
         activeJob: this.activeJob,
         activeRecording: this.activeRecording,
         workflows: this.workflowStore.listWorkflows("default"),
-        history: this.historyStore.getAll().slice(0, 20)
+        history: this.historyStore.getAll().slice(0, 20),
+        discordProfiles: this.profileStore.getAllProfiles(),
+        accountMappings: this.profileStore.getAllMappings()
       }
     }));
   }
@@ -139,6 +143,38 @@ export class JobManager {
       browserConfig,
       websiteUrl
     }, 45000);
+    return result;
+  }
+
+  // Action: Test Discord Profile
+  async testDiscordProfile(profileId, discordUrl) {
+    const profile = this.profileStore.getProfileById(profileId);
+    if (!profile) {
+      throw new Error(`Profile with ID "${profileId}" not found.`);
+    }
+
+    const result = await this.sendToAgent("TEST_DISCORD_PROFILE", { profile, discordUrl }, 25000);
+    if (result && result.status) {
+      this.profileStore.updateProfile(profileId, {
+        status: result.status,
+        statusMessage: result.message || "",
+        lastTestedAt: new Date().toISOString()
+      });
+      this.broadcastToClients("DISCORD_PROFILES_UPDATED", {
+        profiles: this.profileStore.getAllProfiles()
+      });
+    }
+    return result;
+  }
+
+  // Action: Launch Discord Profile Interactively
+  async launchDiscordProfile(profileId, discordUrl) {
+    const profile = this.profileStore.getProfileById(profileId);
+    if (!profile) {
+      throw new Error(`Profile with ID "${profileId}" not found.`);
+    }
+
+    const result = await this.sendToAgent("LAUNCH_DISCORD_PROFILE", { profile, discordUrl }, 20000);
     return result;
   }
 
@@ -261,6 +297,20 @@ export class JobManager {
         throw new Error(`${missingCreators.length} selected reel${missingCreators.length > 1 ? 's are' : ' is'} missing a Creator.`);
       }
       console.log(`[JOB] Kick job payload reels: ${reelsList.length}`);
+    }
+
+    if (submissionType === "dual" && reelsList.length > 0) {
+      const routingCheck = this.profileStore.validateQueueRouting(reelsList);
+      if (routingCheck.unmappedAccountsCount > 0) {
+        throw new Error(
+          `Cannot start Dual submission: The following published accounts have no assigned Discord profile: ${routingCheck.unmappedAccounts.join(", ")}. Please configure mappings before executing.`
+        );
+      }
+      if (routingCheck.disconnectedProfilesCount > 0) {
+        throw new Error(
+          `Cannot start Dual submission: The following assigned Discord profiles are not connected: ${routingCheck.disconnectedProfiles.join(", ")}. Please open or test profile connection first.`
+        );
+      }
     }
 
     const jobId = Math.floor(1000 + Math.random() * 9000);

@@ -6,6 +6,7 @@ import { BatchWorkflowRunner } from "../automation/workflow/batch-workflow-runne
 import { BatchQueueStore } from "../automation/workflow/batch-queue-store.js";
 import { JobStatus } from "../shared/states.js";
 import { SubmissionType } from "../shared/submission-types.js";
+import { DiscordProfileStore } from "../web/backend/discord-profile-store.js";
 
 export class JobRunner {
   constructor(browserManager) {
@@ -139,6 +140,15 @@ export class JobRunner {
 
         const context = await this.browserManager.getContext(browserConfig);
 
+        let profileRouter = jobPayload.profileRouter;
+        if (!profileRouter) {
+          try {
+            profileRouter = new DiscordProfileStore();
+          } catch {
+            profileRouter = null;
+          }
+        }
+
         onStatusUpdate(JobStatus.PROCESSING);
         const result = await executeDualJob({
           context,
@@ -146,6 +156,8 @@ export class JobRunner {
           websiteUrl,
           discordUrl,
           queueOverride: rawQueue,
+          profileRouter,
+          browserManager: this.browserManager,
           onStep: (step, detail) => {
             onStep(step, detail);
           },

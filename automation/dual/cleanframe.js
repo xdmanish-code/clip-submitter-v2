@@ -41,17 +41,28 @@ export async function readSubmission(page, row) {
     .replace(/\s*Copy\s*$/i, "")
     .trim();
 
-  const caption =
-    clean(
-      await cells
-        .nth(4)
-        .locator("span[title]")
-        .getAttribute("title")
-        .catch(() => "")
-    ) ||
-    clean(await cells.nth(4).innerText().catch(() => ""))
+  let caption = "";
+  try {
+    const loc = cells.nth(4).locator("span[title]");
+    const targetSpan = typeof loc.first === "function" ? loc.first() : loc;
+    if (typeof targetSpan.getAttribute === "function") {
+      caption = clean(await targetSpan.getAttribute("title", { timeout: 1500 }).catch(() => ""));
+    }
+  } catch {}
+
+  if (!caption) {
+    caption = clean(await cells.nth(4).innerText().catch(() => ""))
       .replace(/\s*Copy\s*$/i, "")
       .trim();
+  }
+
+  const publishedOnAccount = clean(await cells.nth(6).innerText().catch(() => ""))
+    .replace(/\s*Copy\s*$/i, "")
+    .trim();
+
+  const publishStatus = clean(await cells.nth(7).innerText().catch(() => ""))
+    .replace(/\s*Copy\s*$/i, "")
+    .trim();
 
   if (!instagramLink) {
     throw new Error("Instagram link not found.");
@@ -69,7 +80,9 @@ export async function readSubmission(page, row) {
     instagramLink,
     clipper,
     editor,
-    caption
+    caption,
+    publishedOnAccount,
+    publishStatus
   };
 }
 
@@ -187,6 +200,10 @@ export async function collectQueueWithBoundary(websitePage, log = console.log) {
       clipper: item.clipper,
       editor: item.editor,
       caption: item.caption,
+      publishedOnAccount: item.publishedOnAccount || "",
+      publishStatus: item.publishStatus || "",
+      discordProfileId: null,
+      discordProfileName: null,
       state: ClipState.COLLECTED,
       discordId: null,
       errorReason: null
@@ -200,31 +217,91 @@ export async function collectQueueWithBoundary(websitePage, log = console.log) {
 }
 
 /**
+ * Evaluates whether a Cleanframe table row has visually transitioned to a green completed state.
+ * Checks CSS classes, computed background colors, and checkmark icons.
+ *
+ * @param {import('playwright').Locator} row
+ * @returns {Promise<boolean>}
+ */
+export async function isRowVisuallyGreen(row) {
+  if (!row) return false;
+  try {
+    // 1. Check direct class names on row or child elements
+    const hasGreenClass = await row.evaluate((el) => {
+      const classStr = ((el.className || "") + " " + Array.from(el.children).map(c => c.className || "").join(" ")).toLowerCase();
+      return /bg-green|green|emerald|bg-emerald|row-submitted|success|is-submitted/.test(classStr);
+    }).catch(() => false);
+
+    if (hasGreenClass) return true;
+
+    // 2. Check computed background color on row or its td cells
+    const isGreenBg = await row.evaluate((el) => {
+      const checkBg = (target) => {
+        if (!target) return false;
+        const bg = (window.getComputedStyle(target).backgroundColor || "").toLowerCase();
+        // Match rgb(r, g, b) or rgba(r, g, b, a)
+        const match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          // Green channel is dominant and distinctly green
+          if (g > 90 && g > r * 1.15 && g > b * 1.15) return true;
+        }
+        return false;
+      };
+
+      if (checkBg(el)) return true;
+      for (let i = 0; i < el.children.length; i++) {
+        if (checkBg(el.children[i])) return true;
+      }
+      return false;
+    }).catch(() => false);
+
+    if (isGreenBg) return true;
+
+    // 3. Check presence of green checkmark icon in Submit Mark column
+    const submitCell = row.locator("td").nth(5);
+    const greenIcons = await submitCell.locator("svg.lucide-circle-check, svg.lucide-check, .text-green, .text-emerald, .text-success").count().catch(() => 0);
+    return greenIcons > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Clicks GrozyFrame's existing Submit button for a specific reel.
  * 
  * Verifies:
- * - Row match by normalized Instagram URL
+ * - Row match by stable identifier (index + sourceId) and normalized Instagram URL
  * - Does NOT click if already showing 'Submitted ✓' (green check)
  * - Clicks the existing 'Submit' button for the exact matched row only
  * - Does NOT modify captions, creators, accounts, or other fields
  * - Waits and verifies that status transitioned to 'Submitted ✓'
+ * - Verifies visual green row state where available
+ * - Recovers via safe re-read and single retry on ambiguous states
  * 
  * @param {import('playwright').Page} websitePage
- * @param {string} instagramLink
+ * @param {string|object} target
  * @param {Function} log
- * @returns {Promise<{success: boolean, status: string, message: string}>}
+ * @returns {Promise<{success: boolean, status: string, message: string, greenRowConfirmed: boolean, alreadySubmitted?: boolean}>}
  */
-export async function clickGrozyFrameSubmitButton(websitePage, instagramLink, log = console.log) {
+export async function clickGrozyFrameSubmitButton(websitePage, target, log = console.log) {
   if (!websitePage) {
-    throw new Error("GrozyFrame websitePage is required");
+    throw new Error("Cleanframe websitePage is required");
   }
+
+  const instagramLink = typeof target === "string" ? target : target?.instagramLink;
+  const sourceId = typeof target === "object" ? target?.sourceId : null;
+  const originalRowIndex = typeof target === "object" ? target?.originalRowIndex : -1;
 
   const normalizedTarget = normalizeInstagramUrl(instagramLink);
   if (!normalizedTarget) {
     return {
       success: false,
       status: "INVALID_URL",
-      message: `Invalid or missing Instagram link: ${instagramLink}`
+      message: `Invalid or missing Instagram link: ${instagramLink}`,
+      greenRowConfirmed: false
     };
   }
 
@@ -236,43 +313,69 @@ export async function clickGrozyFrameSubmitButton(websitePage, instagramLink, lo
   let matchedRowIndex = -1;
   let matchedRow = null;
 
-  for (let i = 0; i < rowCount; i++) {
-    const row = rows.nth(i);
-    const cells = row.locator("td");
-    let link = "";
+  // Fast path: if originalRowIndex is within bounds, test it first
+  if (originalRowIndex >= 0 && originalRowIndex < rowCount) {
+    const candidateRow = rows.nth(originalRowIndex);
+    const cells = candidateRow.locator("td");
     const linkA1 = cells.nth(1).locator("a").first();
-    if ((await linkA1.count()) > 0) {
-      link = clean(await linkA1.getAttribute("href").catch(() => ""));
+    let candLink = "";
+    if ((await linkA1.count().catch(() => 0)) > 0) {
+      candLink = clean(await linkA1.getAttribute("href").catch(() => ""));
     }
-    if (!link) {
-      const linkA0 = cells.nth(0).locator("a").first();
-      if ((await linkA0.count()) > 0) {
-        link = clean(await linkA0.getAttribute("href").catch(() => ""));
-      }
+    if (candLink === instagramLink || (candLink && normalizeInstagramUrl(candLink) === normalizedTarget)) {
+      matchedRowIndex = originalRowIndex;
+      matchedRow = candidateRow;
     }
-    if (!link) {
-      const text0 = await cells.nth(0).innerText().catch(() => "");
-      const match = text0.match(/https?:\/\/[^\s]+/);
-      if (match) link = clean(match[0]);
-    }
+  }
 
-    if (link === instagramLink || (link && normalizeInstagramUrl(link) === normalizedTarget)) {
-      matchedRowIndex = i;
-      matchedRow = row;
-      break;
+  // Full scan if not found in fast path
+  if (!matchedRow) {
+    for (let i = 0; i < rowCount; i++) {
+      const row = rows.nth(i);
+      const cells = row.locator("td");
+      let link = "";
+      const linkA1 = cells.nth(1).locator("a").first();
+      if ((await linkA1.count().catch(() => 0)) > 0) {
+        link = clean(await linkA1.getAttribute("href").catch(() => ""));
+      }
+      if (!link) {
+        const linkA0 = cells.nth(0).locator("a").first();
+        if ((await linkA0.count().catch(() => 0)) > 0) {
+          link = clean(await linkA0.getAttribute("href").catch(() => ""));
+        }
+      }
+      if (!link) {
+        const text0 = await cells.nth(0).innerText().catch(() => "");
+        const match = text0.match(/https?:\/\/[^\s]+/);
+        if (match) link = clean(match[0]);
+      }
+
+      if (link === instagramLink || (link && normalizeInstagramUrl(link) === normalizedTarget)) {
+        // Disambiguate if sourceId provided
+        if (sourceId) {
+          const col0Text = clean(await cells.nth(0).innerText().catch(() => "")).trim();
+          if (col0Text && sourceId && !col0Text.includes(sourceId) && !sourceId.includes(col0Text)) {
+            continue;
+          }
+        }
+        matchedRowIndex = i;
+        matchedRow = row;
+        break;
+      }
     }
   }
 
   if (!matchedRow) {
-    log(`[GrozyFrame] No matching row found for ${instagramLink}`);
+    log(`[Cleanframe] No matching row found for ${instagramLink}`);
     return {
       success: false,
       status: "ROW_NOT_FOUND",
-      message: `Reel URL not found in GrozyFrame table: ${instagramLink}`
+      message: `Reel URL not found in Cleanframe table: ${instagramLink}`,
+      greenRowConfirmed: false
     };
   }
 
-  log(`[GrozyFrame] Matched row ${matchedRowIndex} for ${instagramLink}`);
+  log(`[Cleanframe] Matched row #${matchedRowIndex + 1} for ${instagramLink}`);
 
   // Inspect column 5 (SUBMIT MARK)
   const submitCell = matchedRow.locator("td").nth(5);
@@ -280,74 +383,114 @@ export async function clickGrozyFrameSubmitButton(websitePage, instagramLink, lo
 
   const buttonExists = await submitButton.isVisible({ timeout: 1500 }).catch(() => false);
   if (!buttonExists) {
-    log(`[GrozyFrame] Row ${matchedRowIndex} does not have a button in Submit Mark column`);
+    // Check if cell already shows submitted indicator without a button
+    if (await isRowSubmitted(matchedRow)) {
+      const isGreen = await isRowVisuallyGreen(matchedRow);
+      log(`[Cleanframe] Row #${matchedRowIndex + 1} is already Submitted (no button active) - Green row: ${isGreen}`);
+      return {
+        success: true,
+        alreadySubmitted: true,
+        status: "ALREADY_SUBMITTED",
+        message: "Row already marked as Submitted",
+        greenRowConfirmed: isGreen
+      };
+    }
+    log(`[Cleanframe] Row #${matchedRowIndex + 1} does not have a button in Submit Mark column`);
     return {
       success: false,
       status: "BUTTON_NOT_FOUND",
-      message: `Submit Mark button not found for row ${matchedRowIndex}`
+      message: `Submit Mark button not found for row #${matchedRowIndex + 1}`,
+      greenRowConfirmed: false
     };
   }
 
   const currentButtonText = (await submitButton.innerText().catch(() => "")).trim();
-  const currentTitle = (await submitButton.getAttribute("title").catch(() => "")).trim();
 
   // If already submitted (green check / "Submitted ✓" / title "Click to mark NOT SUBMITTED")
   if (await isRowSubmitted(matchedRow)) {
-    log(`[GrozyFrame] Row ${matchedRowIndex} is already Submitted (${currentButtonText}) - skipping click`);
+    const isGreen = await isRowVisuallyGreen(matchedRow);
+    log(`[Cleanframe] Row #${matchedRowIndex + 1} is already Submitted (${currentButtonText}) - Green row: ${isGreen} - skipping click`);
     return {
       success: true,
+      alreadySubmitted: true,
       status: "ALREADY_SUBMITTED",
-      message: `Reel already marked as Submitted: ${currentButtonText}`
+      message: `Reel already marked as Submitted (${currentButtonText})`,
+      greenRowConfirmed: isGreen
     };
   }
 
   // Verify this is the pending "Submit" button
   if (!currentButtonText.includes("Submit")) {
-    log(`[GrozyFrame] Row ${matchedRowIndex} button text unexpected: "${currentButtonText}" - skipping`);
+    log(`[Cleanframe] Row #${matchedRowIndex + 1} button text unexpected: "${currentButtonText}" - skipping`);
     return {
       success: false,
       status: "UNEXPECTED_BUTTON_STATE",
-      message: `Unexpected button text "${currentButtonText}" for row ${matchedRowIndex}`
+      message: `Unexpected button text "${currentButtonText}" for row #${matchedRowIndex + 1}`,
+      greenRowConfirmed: false
     };
   }
 
-  log(`[GrozyFrame] Clicking existing Submit button for row ${matchedRowIndex}...`);
+  log(`[Cleanframe] Clicking Submit button for row #${matchedRowIndex + 1}...`);
   await submitButton.scrollIntoViewIfNeeded().catch(() => {});
   await submitButton.click();
 
-  // Wait and verify the button transitions to "Submitted ✓"
+  // Wait and verify the button transitions to "Submitted ✓" / green state
   let transitioned = false;
   let finalStatusText = "";
 
-  for (let attempt = 0; attempt < 15; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     await websitePage.waitForTimeout(300);
-    const updatedText = (await submitButton.innerText().catch(() => "")).trim();
-    const updatedTitle = (await submitButton.getAttribute("title").catch(() => "")).trim();
-    if (
-      updatedText.includes("Submitted") ||
-      updatedText.includes("✓") ||
-      /not submitted/i.test(updatedTitle)
-    ) {
+    if (await isRowSubmitted(matchedRow)) {
       transitioned = true;
-      finalStatusText = updatedText;
+      finalStatusText = (await submitButton.innerText().catch(() => "")).trim();
       break;
     }
   }
 
+  // Recovery Re-read check if transition not immediately observed
+  if (!transitioned) {
+    log(`[Cleanframe] Transition not detected immediately for row #${matchedRowIndex + 1}. Performing recovery re-read...`);
+    await websitePage.waitForTimeout(500);
+    if (await isRowSubmitted(matchedRow)) {
+      transitioned = true;
+      finalStatusText = (await submitButton.innerText().catch(() => "")).trim();
+    } else {
+      // Safe retry once if button is still present and clickable
+      const buttonStillClickable = await submitButton.isVisible({ timeout: 500 }).catch(() => false);
+      const lingeringText = (await submitButton.innerText().catch(() => "")).trim();
+      if (buttonStillClickable && lingeringText.includes("Submit") && !lingeringText.includes("✓")) {
+        log(`[Cleanframe] Re-attempting safe click on Submit button for row #${matchedRowIndex + 1}...`);
+        await submitButton.click().catch(() => {});
+        for (let retryAttempt = 0; retryAttempt < 10; retryAttempt++) {
+          await websitePage.waitForTimeout(300);
+          if (await isRowSubmitted(matchedRow)) {
+            transitioned = true;
+            finalStatusText = (await submitButton.innerText().catch(() => "")).trim();
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  const greenRowConfirmed = await isRowVisuallyGreen(matchedRow);
+
   if (transitioned) {
-    log(`[GrozyFrame] Verification successful: row ${matchedRowIndex} marked as "${finalStatusText}"`);
+    log(`[Cleanframe] Verification successful: row #${matchedRowIndex + 1} marked as "${finalStatusText}" (Green row: ${greenRowConfirmed})`);
     return {
       success: true,
-      status: "SUBMITTED",
-      message: `Submit button clicked and verified: ${finalStatusText}`
+      status: "COMPLETED",
+      message: `Submit button clicked and verified: ${finalStatusText}`,
+      greenRowConfirmed
     };
   } else {
     const lingeringText = (await submitButton.innerText().catch(() => "")).trim();
-    log(`[GrozyFrame] Warning: row ${matchedRowIndex} button clicked, but did not transition within timeout (current: "${lingeringText}")`);
+    log(`[Cleanframe] Warning: row #${matchedRowIndex + 1} button clicked, but state remained "${lingeringText}" (requires attention)`);
     return {
       success: false,
-      status: "TRANSITION_TIMEOUT",
-      message: `Button clicked, but state remained "${lingeringText}"`
+      status: "UNKNOWN",
+      message: `Button clicked, but state could not be verified within timeout (lingering: "${lingeringText}")`,
+      greenRowConfirmed: false
     };
   }
 }

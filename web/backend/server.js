@@ -80,6 +80,141 @@ app.post("/api/queue/preview", async (req, res) => {
   }
 });
 
+// ==========================================
+// DISCORD PROFILES & ACCOUNT ROUTING ROUTES
+// ==========================================
+
+// Get all Discord profiles
+app.get("/api/discord-profiles", (req, res) => {
+  res.json(jobManager.profileStore.getAllProfiles());
+});
+
+// Create new Discord profile
+app.post("/api/discord-profiles", (req, res) => {
+  try {
+    const profile = jobManager.profileStore.createProfile(req.body);
+    jobManager.broadcastToClients("DISCORD_PROFILES_UPDATED", {
+      profiles: jobManager.profileStore.getAllProfiles()
+    });
+    res.json({ success: true, profile });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Update an existing Discord profile
+app.put("/api/discord-profiles/:id", (req, res) => {
+  try {
+    const profile = jobManager.profileStore.updateProfile(req.params.id, req.body);
+    jobManager.broadcastToClients("DISCORD_PROFILES_UPDATED", {
+      profiles: jobManager.profileStore.getAllProfiles()
+    });
+    res.json({ success: true, profile });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Delete a Discord profile
+app.delete("/api/discord-profiles/:id", (req, res) => {
+  try {
+    jobManager.profileStore.deleteProfile(req.params.id);
+    jobManager.broadcastToClients("DISCORD_PROFILES_UPDATED", {
+      profiles: jobManager.profileStore.getAllProfiles()
+    });
+    jobManager.broadcastToClients("ACCOUNT_MAPPINGS_UPDATED", {
+      mappings: jobManager.profileStore.getAllMappings()
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Test connection and authentication of a Discord profile
+app.post("/api/discord-profiles/:id/test", async (req, res) => {
+  try {
+    const { discordUrl } = req.body;
+    const result = await jobManager.testDiscordProfile(req.params.id, discordUrl || process.env.DISCORD_URL);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Launch interactive browser window for manual sign-in
+app.post("/api/discord-profiles/:id/launch", async (req, res) => {
+  try {
+    const { discordUrl } = req.body;
+    const result = await jobManager.launchDiscordProfile(req.params.id, discordUrl || process.env.DISCORD_URL);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get all account-to-profile mappings
+app.get("/api/account-mappings", (req, res) => {
+  res.json(jobManager.profileStore.getAllMappings());
+});
+
+// Set / update account mapping
+app.post("/api/account-mappings", (req, res) => {
+  try {
+    const { account, profileId } = req.body;
+    const mapping = jobManager.profileStore.setMapping(account, profileId);
+    jobManager.broadcastToClients("ACCOUNT_MAPPINGS_UPDATED", {
+      mappings: jobManager.profileStore.getAllMappings()
+    });
+    res.json({ success: true, mapping });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Delete account mapping
+app.delete("/api/account-mappings/:account", (req, res) => {
+  try {
+    const deleted = jobManager.profileStore.deleteMapping(req.params.account);
+    jobManager.broadcastToClients("ACCOUNT_MAPPINGS_UPDATED", {
+      mappings: jobManager.profileStore.getAllMappings()
+    });
+    res.json({ success: true, deleted });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Validate routing and return preflight summary for a loaded queue
+app.post("/api/account-mappings/preflight", (req, res) => {
+  try {
+    const { queue } = req.body;
+    const summary = jobManager.profileStore.validateQueueRouting(queue || []);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Discover accounts from loaded queue
+app.post("/api/account-mappings/discover", (req, res) => {
+  try {
+    const { queue } = req.body;
+    const discovered = new Set();
+    for (const item of (queue || [])) {
+      if (item.publishedOnAccount) {
+        const cleanAcc = String(item.publishedOnAccount).trim();
+        if (cleanAcc && cleanAcc.toLowerCase() !== "not published" && cleanAcc !== "-") {
+          discovered.add(cleanAcc.startsWith("@") ? cleanAcc.toLowerCase() : "@" + cleanAcc.toLowerCase());
+        }
+      }
+    }
+    res.json({ accounts: Array.from(discovered) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start a new job (Dual or Kick)
 app.post("/api/jobs/start", async (req, res) => {
   try {

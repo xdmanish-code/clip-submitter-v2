@@ -1,0 +1,13 @@
+[
+  {
+    "id": "prof_default",
+    "name": "Discord Profile 1",
+    "mode": "dedicated",
+    "port": 9222,
+    "profileDir": null,
+    "status": "NOT_CONNECTED",
+    "statusMessage": "Profile initialized. Click Test or Open Browser to authenticate.",
+    "lastTestedAt": null,
+    "createdAt": "2026-10-13T14:30:44.593Z"
+  }
+]

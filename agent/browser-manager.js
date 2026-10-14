@@ -9,6 +9,7 @@ export class BrowserManager {
     this.activeContext = null;
     this.activeBrowser = null;
     this.isPersistentLaunch = false;
+    this.profileContexts = new Map();
   }
 
   /**
@@ -202,8 +203,151 @@ export class BrowserManager {
   }
 
   /**
-   * Closes active browser / context if needed.
+   * Retrieves or launches an isolated browser context for a specific named profile.
    */
+  async getProfileContext(profile = {}) {
+    const profileId = profile.id || "default";
+    if (this.profileContexts.has(profileId)) {
+      const existing = this.profileContexts.get(profileId);
+      try {
+        if (Array.isArray(existing.pages())) {
+          return existing;
+        }
+      } catch {
+        this.profileContexts.delete(profileId);
+      }
+    }
+
+    if (profile.mode === "existing") {
+      const { context } = await this.connectExistingProfile({
+        port: profile.port || 9222,
+        host: profile.host || "127.0.0.1"
+      });
+      this.profileContexts.set(profileId, context);
+      return context;
+    } else {
+      const targetDir = profile.profileDir || this.getDefaultProfileDir("discord_" + profileId);
+      const standard = getStandardBrowserPaths();
+      let execToUse = null;
+      const candidates = [...standard.chrome, ...standard.edge, ...standard.brave, ...standard.chromium];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          execToUse = p;
+          break;
+        }
+      }
+      const options = {
+        headless: profile.headless !== undefined ? Boolean(profile.headless) : false,
+        viewport: null,
+        args: [
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--disable-blink-features=AutomationControlled"
+        ]
+      };
+      if (execToUse) options.executablePath = execToUse;
+
+      const context = await chromium.launchPersistentContext(targetDir, options);
+      context.on("close", () => {
+        this.profileContexts.delete(profileId);
+      });
+      this.profileContexts.set(profileId, context);
+      return context;
+    }
+  }
+
+  /**
+   * Tests whether a Discord profile is currently authenticated.
+   */
+  async testDiscordProfile(profile, discordUrl = "https://discord.com/channels/@me") {
+    try {
+      const context = await this.getProfileContext(profile);
+      const pages = context.pages();
+      let discordPage = pages.find(p => {
+        try { return p.url().includes("discord.com"); } catch { return false; }
+      });
+
+      if (!discordPage) {
+        discordPage = await context.newPage();
+        await discordPage.goto(discordUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await discordPage.waitForTimeout(1200);
+      }
+
+      const currentUrl = discordPage.url();
+      if (currentUrl.includes("/login") || currentUrl.includes("/register")) {
+        return {
+          success: false,
+          status: "NOT_CONNECTED",
+          message: "Profile opened, but Discord is not logged in. Click 'Open Browser' to log in manually."
+        };
+      }
+
+      const isLoggedOut = await discordPage
+        .locator('input[name="email"], input[type="password"], form[action*="login"]')
+        .count()
+        .catch(() => 0);
+
+      if (isLoggedOut > 0) {
+        return {
+          success: false,
+          status: "NOT_CONNECTED",
+          message: "Discord login form detected. Please log into your Discord account in this profile."
+        };
+      }
+
+      return {
+        success: true,
+        status: "CONNECTED",
+        message: `Successfully connected to Discord session for "${profile.name}".`
+      };
+    } catch (err) {
+      return {
+        success: false,
+        status: "CONNECTION_FAILED",
+        message: `Connection failed: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * Launches a visible interactive browser window for a profile so the user can log in manually.
+   */
+  async launchProfileInteractive(profile, discordUrl = "https://discord.com/channels/@me") {
+    try {
+      const context = await this.getProfileContext({ ...profile, headless: false });
+      const pages = context.pages();
+      let discordPage = pages.find(p => {
+        try { return p.url().includes("discord.com"); } catch { return false; }
+      }) || pages[0] || (await context.newPage());
+
+      await discordPage.goto(discordUrl, { waitUntil: "domcontentloaded" }).catch(() => {});
+      await discordPage.bringToFront().catch(() => {});
+
+      return {
+        success: true,
+        message: `Browser opened for "${profile.name}". Please log in to your Discord account.`
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: `Failed to launch browser for profile: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * Closes an active profile's browser context.
+   */
+  async closeProfileContext(profileId) {
+    if (this.profileContexts.has(profileId)) {
+      const ctx = this.profileContexts.get(profileId);
+      this.profileContexts.delete(profileId);
+      await ctx.close().catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
   async cleanup() {
     try {
       if (this.isPersistentLaunch && this.activeContext) {

@@ -229,6 +229,66 @@
             </div>
           </div>
 
+          <!-- MULTI-DISCORD PROFILES & ROUTING SECTION -->
+          <div class="routing-config-section" style="margin-top: 16px; margin-bottom: 20px; padding: 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div class="flex-between" style="align-items: center;">
+              <div>
+                <h3 style="font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin: 0;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                  Multi-Discord Profiles & Account Routing
+                </h3>
+                <p class="text-sm text-muted" style="margin: 3px 0 0 0;">Manage isolated Discord user accounts and automatically route submissions based on Cleanframe's Published on Account column.</p>
+              </div>
+              <button class="btn btn-sm btn-outline" type="button" onclick="toggleRoutingPanel()">
+                <span id="toggleRoutingText">Show Routing Settings</span>
+              </button>
+            </div>
+
+            <div id="routingDetailsPanel" style="display: none; margin-top: 16px;">
+              <!-- PROFILES MANAGER -->
+              <div style="margin-bottom: 20px;">
+                <div class="flex-between" style="align-items: center; margin-bottom: 10px;">
+                  <h4 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin: 0;">Configured Discord Profiles</h4>
+                  <button class="btn btn-xs btn-primary" onclick="showAddProfileModal()">+ Add Discord Profile</button>
+                </div>
+                <div id="discordProfilesList" class="profiles-card-grid">
+                  <!-- Dynamically populated profile cards -->
+                </div>
+              </div>
+
+              <!-- ACCOUNT MAPPINGS MANAGER -->
+              <div>
+                <div class="flex-between" style="align-items: center; margin-bottom: 10px;">
+                  <h4 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin: 0;">Published Account → Profile Routing Rules</h4>
+                  <div class="flex-align" style="gap: 8px;">
+                    <button class="btn btn-xs btn-outline" onclick="discoverAccountsFromQueue()">Discover from Queue</button>
+                    <button class="btn btn-xs btn-primary" onclick="showAddMappingModal()">+ Add Mapping</button>
+                  </div>
+                </div>
+                <div class="table-container" style="max-height: 220px; overflow-y: auto;">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Published on Account</th>
+                        <th>Assigned Discord Profile</th>
+                        <th>Profile Status</th>
+                        <th style="width: 80px; text-align: center;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="mappingsTableBody">
+                      <!-- Dynamically populated mapping rows -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- PREFLIGHT ROUTING SUMMARY BADGE -->
+            <div id="routingPreflightSummary" class="preflight-summary-box" style="margin-top: 12px; display: none;">
+              <!-- Dynamic preflight checks -->
+            </div>
+          </div>
+
           <!-- DUAL QUEUE PREVIEW TABLE -->
           <div id="queuePreviewSection" class="queue-preview-section">
             <div class="table-header-row">
@@ -247,13 +307,15 @@
                     <th>Instagram Link</th>
                     <th>Clipper</th>
                     <th>Editor</th>
+                    <th>Published on Account</th>
+                    <th>Discord Profile</th>
                     <th>Caption Preview</th>
                     <th>State</th>
                   </tr>
                 </thead>
                 <tbody id="queueTableBody">
                   <tr class="empty-row">
-                    <td colspan="6">No pending clips loaded yet. Click <strong>"Load Pending Clips"</strong>.</td>
+                    <td colspan="8">No pending clips loaded yet. Click <strong>"Load Pending Clips"</strong>.</td>
                   </tr>
                 </tbody>
               </table>
@@ -403,6 +465,32 @@
             </div>
             <div id="liveLogsBox" class="logs-box"></div>
           </div>
+
+          <!-- RECONCILIATION REPORT (SHOWN UPON COMPLETION) -->
+          <div id="activeJobReconciliationSection" class="reconciliation-card" style="display: none;">
+            <div class="reconciliation-header">
+              <h3 style="margin: 0; font-size: 1rem; color: #38bdf8;">⚡ Cleanframe & Discord Final Reconciliation Report</h3>
+              <span id="activeJobReconciliationBadge" class="badge">--</span>
+            </div>
+            <div id="activeJobReconciliationStatsGrid" class="reconciliation-stats-grid"></div>
+            <div id="activeJobManualActionsAlert" class="manual-actions-alert" style="display: none;"></div>
+            <div class="table-container" style="max-height: 250px; overflow-y: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Reel</th>
+                    <th>Published Account</th>
+                    <th>Discord Profile</th>
+                    <th>Discord Result</th>
+                    <th>Cleanframe Mark</th>
+                    <th>Overall Result</th>
+                  </tr>
+                </thead>
+                <tbody id="activeJobReconciliationTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
 
       </section>
@@ -694,8 +782,9 @@
                 <tr>
                   <th>#</th>
                   <th>Target Link</th>
+                  <th>Published Account</th>
+                  <th>Discord Profile</th>
                   <th>Creator / Clipper</th>
-                  <th>Command / Editor</th>
                   <th>Status</th>
                   <th>Response / Reason</th>
                 </tr>
@@ -703,7 +792,35 @@
               <tbody id="modalClipsTableBody"></tbody>
             </table>
           </div>
+
+          <!-- FINAL CLEANFRAME RECONCILIATION REPORT IN MODAL -->
+          <div id="modalReconciliationSection" style="display: none; margin-top: 20px;">
+            <div class="flex-between" style="align-items: center; margin-bottom: 8px;">
+              <h4 style="margin: 0; color: #38bdf8;">Cleanframe & Discord Reconciliation Report</h4>
+              <span id="modalReconciliationBadge" class="badge">--</span>
+            </div>
+            <div id="modalReconciliationStatsGrid" class="reconciliation-stats-grid"></div>
+            <div id="modalManualActionsAlert" class="manual-actions-alert" style="display: none;"></div>
+            <div class="table-container modal-table" style="max-height: 260px; overflow-y: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Reel</th>
+                    <th>Published Account</th>
+                    <th>Discord Profile</th>
+                    <th>Discord Result</th>
+                    <th>Cleanframe Mark</th>
+                    <th>Overall Result</th>
+                  </tr>
+                </thead>
+                <tbody id="modalReconciliationTableBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
+      </div>
+    </div>
+
     <!-- STEP EDITOR MODAL -->
     <div id="stepEditModal" class="modal-backdrop" style="display: none;">
       <div class="modal-window" style="max-width: 650px;">
@@ -949,6 +1066,65 @@
 
           <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
             <button class="btn btn-secondary" onclick="closeBatchExecutionModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DISCORD PROFILE ADD/EDIT MODAL -->
+    <div id="addProfileModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-window" style="max-width: 500px;">
+        <div class="modal-header flex-between">
+          <h3 id="addProfileModalTitle">Add Discord Profile</h3>
+          <button class="btn btn-close" onclick="closeAddProfileModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editProfileId" value="">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="inputProfileName">Profile Name</label>
+            <input type="text" id="inputProfileName" class="form-input" placeholder="e.g. Discord Profile 2">
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="selectProfileMode">Browser Session Isolation</label>
+            <select id="selectProfileMode" class="form-select" onchange="onProfileModeChange()">
+              <option value="dedicated">Dedicated Isolated Profile (Recommended - Launches separate user session)</option>
+              <option value="existing">Existing Chrome via CDP Port (e.g. 9222, 9223)</option>
+            </select>
+          </div>
+          <div id="profilePortGroup" class="form-group" style="margin-bottom: 12px; display: none;">
+            <label for="inputProfilePort">Remote Debugging Port</label>
+            <input type="number" id="inputProfilePort" class="form-input" value="9223">
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="closeAddProfileModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveDiscordProfile()">Save Profile</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACCOUNT MAPPING ADD/EDIT MODAL -->
+    <div id="addMappingModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-window" style="max-width: 480px;">
+        <div class="modal-header flex-between">
+          <h3 id="addMappingModalTitle">Map Account to Discord Profile</h3>
+          <button class="btn btn-close" onclick="closeAddMappingModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="inputMappingAccount">Published on Account</label>
+            <input type="text" id="inputMappingAccount" class="form-input" placeholder="e.g. @cubeflox">
+            <span class="text-xs text-muted">Enter exact handle from Cleanframe table. Case and whitespace are normalized.</span>
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="selectMappingProfile">Assign to Discord Profile</label>
+            <select id="selectMappingProfile" class="form-select">
+              <!-- Dynamically populated profiles -->
+            </select>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="closeAddMappingModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveAccountMapping()">Save Mapping</button>
           </div>
         </div>
       </div>

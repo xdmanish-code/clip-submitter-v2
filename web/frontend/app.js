@@ -14,6 +14,9 @@ const state = {
   recordedSteps: [],
   recordingState: "IDLE",
   activeRecordingSessionId: null,
+  discordProfiles: [],
+  accountMappings: [],
+  routingPreflight: null,
   defaults: {
     websiteUrl: "",
     discordUrl: "",
@@ -30,6 +33,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadConfigDefaults();
   initWebSocket();
   await loadHistory();
+  await loadDiscordProfiles();
+  await loadAccountMappings();
 });
 
 // Load config defaults from backend
@@ -99,6 +104,14 @@ function handleWsMessage({ type, payload }) {
         state.recordingState = payload.activeRecording.status || "IDLE";
         state.activeRecordingSessionId = payload.activeRecording.sessionId || null;
         updateRecorderUI(state.recordingState);
+      }
+      if (payload.discordProfiles) {
+        state.discordProfiles = payload.discordProfiles;
+        renderDiscordProfiles();
+      }
+      if (payload.accountMappings) {
+        state.accountMappings = payload.accountMappings;
+        renderAccountMappings();
       }
       break;
 
@@ -193,6 +206,12 @@ function handleWsMessage({ type, payload }) {
       loadHistory();
       if (state.activeJob && String(state.activeJob.id) === String(payload.jobId)) {
         state.activeJob.status = payload.status || (type === "JOB_COMPLETED" ? "COMPLETED" : "FAILED");
+        if (payload.job) {
+          state.activeJob = { ...state.activeJob, ...payload.job };
+        }
+        if (payload.result?.summary) {
+          state.activeJob.summary = payload.result.summary;
+        }
         renderActiveJob(state.activeJob);
       }
       break;
@@ -213,6 +232,32 @@ function handleWsMessage({ type, payload }) {
       if (state.activeBatchJob) {
         state.activeBatchJob.status = "PROCESSING";
         renderBatchQueueTable(state.activeBatchJob);
+      }
+      break;
+
+    case "DISCORD_PROFILES_UPDATED":
+      state.discordProfiles = payload.profiles || payload || [];
+      renderDiscordProfiles();
+      renderAccountMappings();
+      updateRoutingPreflightSummary();
+      break;
+
+    case "ACCOUNT_MAPPINGS_UPDATED":
+      state.accountMappings = payload.mappings || payload || [];
+      renderAccountMappings();
+      updateRoutingPreflightSummary();
+      break;
+
+    case "DISCORD_PROFILE_STATUS_CHANGED":
+      if (payload.profileId) {
+        const p = state.discordProfiles.find(x => x.id === payload.profileId);
+        if (p) {
+          p.status = payload.status;
+          p.lastTestedAt = payload.lastTestedAt || new Date().toISOString();
+          p.lastError = payload.lastError || null;
+          renderDiscordProfiles();
+          renderAccountMappings();
+        }
       }
       break;
   }
@@ -419,6 +464,11 @@ window.loadQueuePreview = async function() {
           command: creator ? normalizeCreatorSlug(creator) : null,
           editor: c.editor || "",
           caption: c.caption || "",
+          publishedOnAccount: c.publishedOnAccount || c.published_on_account || "",
+          publishStatus: c.publishStatus || c.publish_status || "",
+          discordProfileId: c.discordProfileId || null,
+          discordProfileName: c.discordProfileName || null,
+          routingStatus: c.routingStatus || null,
           state: c.state || "PENDING"
         };
       });
@@ -430,6 +480,7 @@ window.loadQueuePreview = async function() {
       renderDualQueueTable(state.loadedQueue);
       renderKickQueueTable(state.loadedQueue);
       validateKickQueue();
+      updateRoutingPreflightSummary();
 
       document.getElementById("btnStartJob").disabled = state.loadedQueue.length === 0;
     } else {
@@ -457,22 +508,539 @@ function renderDualQueueTable(queue = []) {
   if (queue.length === 0) {
     tbody.innerHTML = `
       <tr class="empty-row">
-        <td colspan="6">No pending clips loaded yet. Click <strong>"Load Pending Clips"</strong>.</td>
+        <td colspan="8">No pending clips loaded yet. Click <strong>"Load Pending Clips"</strong>.</td>
       </tr>
     `;
     return;
   }
 
-  tbody.innerHTML = queue.map((clip, idx) => `
-    <tr>
-      <td><strong>${idx + 1}</strong></td>
-      <td class="font-mono" style="font-size: 0.8rem;"><a href="${clip.instagramLink}" target="_blank" style="color:#60a5fa">${clip.instagramLink}</a></td>
-      <td><strong>@${clip.clipper || clip.creator || 'unknown'}</strong></td>
-      <td>${clip.editor ? `@${clip.editor}` : '<span class="text-muted">unclaimed</span>'}</td>
-      <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${clip.caption}</td>
-      <td><span class="badge badge-${clip.state}">${clip.state}</span></td>
-    </tr>
+  tbody.innerHTML = queue.map((clip, idx) => {
+    let profileDisplay = '<span class="text-muted">--</span>';
+    const pubAccount = clip.publishedOnAccount ? clip.publishedOnAccount.trim() : "";
+    const isPublished = pubAccount && pubAccount.toLowerCase() !== "not published";
+
+    if (clip.discordProfileName) {
+      profileDisplay = `<span class="profile-assigned-badge">${escapeHtml(clip.discordProfileName)}</span>`;
+    } else if (isPublished) {
+      const norm = pubAccount.toLowerCase().startsWith("@") ? pubAccount.toLowerCase() : `@${pubAccount.toLowerCase()}`;
+      const mapping = (state.accountMappings || []).find(m => m.account.toLowerCase() === norm);
+      if (mapping) {
+        const prof = (state.discordProfiles || []).find(p => p.id === mapping.profileId);
+        profileDisplay = `<span class="profile-assigned-badge">${escapeHtml(prof ? prof.name : mapping.profileName)}</span>`;
+      } else if (state.discordProfiles && state.discordProfiles.length === 1 && (!state.accountMappings || state.accountMappings.length === 0)) {
+        profileDisplay = `<span class="profile-assigned-badge" style="background:#1e293b; color:#94a3b8;">${escapeHtml(state.discordProfiles[0].name)} (default)</span>`;
+      } else {
+        profileDisplay = `<span class="routing-unmapped-pill">Unmapped</span> <button class="btn btn-xs btn-outline" style="padding:1px 6px; font-size:10px; margin-left:4px;" onclick="showAddMappingModal('${escapeHtml(pubAccount)}')">+ Map</button>`;
+      }
+    } else if (pubAccount) {
+      profileDisplay = `<span class="text-muted" style="font-size:0.75rem;">Not Published</span>`;
+    }
+
+    return `
+      <tr>
+        <td><strong>${idx + 1}</strong></td>
+        <td class="font-mono" style="font-size: 0.8rem;"><a href="${clip.instagramLink}" target="_blank" style="color:#60a5fa">${clip.instagramLink}</a></td>
+        <td><strong>@${escapeHtml(clip.clipper || clip.creator || 'unknown')}</strong></td>
+        <td>${clip.editor ? `@${escapeHtml(clip.editor)}` : '<span class="text-muted">unclaimed</span>'}</td>
+        <td>${pubAccount ? `<strong style="color:#c084fc">${escapeHtml(pubAccount)}</strong>` : '<span class="text-muted">--</span>'}</td>
+        <td>${profileDisplay}</td>
+        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(clip.caption)}</td>
+        <td><span class="badge badge-${clip.state}">${clip.state}</span></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// ==========================================
+// MULTI-DISCORD PROFILES & ROUTING RULES
+// ==========================================
+
+window.toggleRoutingPanel = function() {
+  const panel = document.getElementById("routingDetailsPanel");
+  const btnText = document.getElementById("toggleRoutingText");
+  if (!panel) return;
+  const isHidden = panel.style.display === "none";
+  panel.style.display = isHidden ? "block" : "none";
+  if (btnText) btnText.textContent = isHidden ? "Hide Routing Settings" : "Show Routing Settings";
+};
+
+async function loadDiscordProfiles() {
+  try {
+    const res = await fetch("/api/discord-profiles");
+    const data = await res.json();
+    if (data.success && Array.isArray(data.profiles)) {
+      state.discordProfiles = data.profiles;
+      renderDiscordProfiles();
+      renderAccountMappings();
+    }
+  } catch (err) {
+    console.warn("Could not load Discord profiles:", err);
+  }
+}
+
+function renderDiscordProfiles() {
+  const container = document.getElementById("discordProfilesList");
+  if (!container) return;
+
+  const profiles = state.discordProfiles || [];
+  if (profiles.length === 0) {
+    container.innerHTML = `<div class="text-muted" style="padding: 12px; font-size: 0.85rem;">No Discord profiles configured yet. Click "+ Add Discord Profile" above.</div>`;
+    return;
+  }
+
+  container.innerHTML = profiles.map(p => {
+    let statusClass = "status-not-connected";
+    let statusLabel = "Not Connected";
+    if (p.status === "CONNECTED") {
+      statusClass = "status-connected";
+      statusLabel = "Connected";
+    } else if (p.status === "CONNECTION_FAILED") {
+      statusClass = "status-failed";
+      statusLabel = "Failed";
+    }
+
+    const modeDesc = p.sessionMode === "existing"
+      ? `CDP Port: ${p.cdpPort || 9222}`
+      : `Dedicated Profile: ${escapeHtml(p.userDataDirName || `discord_${p.id}`)}`;
+
+    const lastTested = p.lastTestedAt ? new Date(p.lastTestedAt).toLocaleTimeString() : null;
+
+    return `
+      <div class="profile-card" data-profile-id="${p.id}">
+        <div class="profile-card-header">
+          <div>
+            <div class="profile-name">${escapeHtml(p.name)}</div>
+            <div class="profile-port-badge">${modeDesc}</div>
+          </div>
+          <span class="profile-status-pill ${statusClass}">
+            <span class="status-dot"></span>
+            ${statusLabel}
+          </span>
+        </div>
+        ${p.lastError ? `<div class="text-xs" style="color: #f87171; margin-top: 6px; word-break: break-word;">${escapeHtml(p.lastError)}</div>` : ''}
+        <div class="profile-card-actions">
+          <button class="btn btn-xs btn-primary" onclick="launchDiscordProfileBrowser('${p.id}')" title="Opens isolated browser window so you can log into Discord directly without revealing credentials">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            Open Browser
+          </button>
+          <button class="btn btn-xs btn-secondary" onclick="testDiscordProfileConnection('${p.id}')">
+            Test
+          </button>
+          ${profiles.length > 1 ? `
+            <button class="btn btn-xs btn-outline" style="color: #f87171;" onclick="deleteDiscordProfile('${p.id}')">
+              Delete
+            </button>
+          ` : ''}
+        </div>
+        ${lastTested ? `<div class="text-xs text-muted" style="margin-top: 6px;">Tested at ${lastTested}</div>` : ''}
+      </div>
+    `;
+  }).join("");
+
+  updateMappingProfileSelectOptions();
+}
+
+window.showAddProfileModal = function(profileId = null) {
+  const modal = document.getElementById("addProfileModal");
+  const title = document.getElementById("addProfileModalTitle");
+  const editIdInput = document.getElementById("editProfileId");
+  const nameInput = document.getElementById("inputProfileName");
+  const modeSelect = document.getElementById("selectProfileMode");
+  const portInput = document.getElementById("inputProfilePort");
+
+  if (!modal) return;
+
+  if (profileId) {
+    const p = (state.discordProfiles || []).find(x => x.id === profileId);
+    if (p) {
+      title.textContent = "Edit Discord Profile";
+      editIdInput.value = p.id;
+      nameInput.value = p.name;
+      modeSelect.value = p.sessionMode || "dedicated";
+      portInput.value = p.cdpPort || 9223;
+    }
+  } else {
+    title.textContent = "Add Discord Profile";
+    editIdInput.value = "";
+    nameInput.value = `Discord Profile ${(state.discordProfiles?.length || 0) + 1}`;
+    modeSelect.value = "dedicated";
+    portInput.value = 9222 + (state.discordProfiles?.length || 0);
+  }
+
+  window.onProfileModeChange();
+  modal.style.display = "flex";
+  nameInput.focus();
+};
+
+window.closeAddProfileModal = function() {
+  const modal = document.getElementById("addProfileModal");
+  if (modal) modal.style.display = "none";
+};
+
+window.onProfileModeChange = function() {
+  const modeSelect = document.getElementById("selectProfileMode");
+  const portGroup = document.getElementById("profilePortGroup");
+  if (modeSelect && portGroup) {
+    portGroup.style.display = modeSelect.value === "existing" ? "block" : "none";
+  }
+};
+
+window.saveDiscordProfile = async function() {
+  const editId = document.getElementById("editProfileId").value;
+  const name = document.getElementById("inputProfileName").value.trim();
+  const sessionMode = document.getElementById("selectProfileMode").value;
+  const cdpPort = Number(document.getElementById("inputProfilePort").value || 9222);
+
+  if (!name) {
+    alert("Please enter a profile name.");
+    return;
+  }
+
+  try {
+    let res;
+    if (editId) {
+      res = await fetch(`/api/discord-profiles/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, sessionMode, cdpPort })
+      });
+    } else {
+      res = await fetch("/api/discord-profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, sessionMode, cdpPort })
+      });
+    }
+
+    const data = await res.json();
+    if (data.success) {
+      closeAddProfileModal();
+      await loadDiscordProfiles();
+    } else {
+      alert(`Could not save profile: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Failed to save profile: ${err.message}`);
+  }
+};
+
+window.deleteDiscordProfile = async function(profileId) {
+  const p = (state.discordProfiles || []).find(x => x.id === profileId);
+  const name = p ? p.name : profileId;
+
+  if (!confirm(`Are you sure you want to delete "${name}"? Any account mappings pointing to this profile will need to be re-assigned.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/discord-profiles/${profileId}`, {
+      method: "DELETE"
+    });
+    const data = await res.json();
+    if (data.success) {
+      await loadDiscordProfiles();
+      await loadAccountMappings();
+    } else {
+      alert(`Could not delete profile: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Failed to delete profile: ${err.message}`);
+  }
+};
+
+window.launchDiscordProfileBrowser = async function(profileId) {
+  const profile = (state.discordProfiles || []).find(p => p.id === profileId);
+  const name = profile ? profile.name : profileId;
+  const discordUrl = document.getElementById("inputDiscordUrl")?.value?.trim() || "";
+
+  try {
+    const res = await fetch(`/api/discord-profiles/${profileId}/launch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discordUrl })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(`Launched isolated browser session for "${name}".\n\nPlease log into Discord in the opened browser window. Your login session will be securely saved locally. Close or minimize the browser window when done.`);
+    } else {
+      alert(`Could not launch browser for "${name}": ${data.error || "Unknown error"}`);
+    }
+  } catch (err) {
+    alert(`Failed to launch browser: ${err.message}`);
+  }
+};
+
+window.testDiscordProfileConnection = async function(profileId) {
+  const profile = (state.discordProfiles || []).find(p => p.id === profileId);
+  const name = profile ? profile.name : profileId;
+  const discordUrl = document.getElementById("inputDiscordUrl")?.value?.trim() || "";
+
+  try {
+    const res = await fetch(`/api/discord-profiles/${profileId}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discordUrl })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (profile) {
+        profile.status = data.status;
+        profile.lastTestedAt = new Date().toISOString();
+        profile.lastError = data.error || null;
+      }
+      renderDiscordProfiles();
+      renderAccountMappings();
+      updateRoutingPreflightSummary();
+      alert(`Connection test for "${name}": ${data.status}\n${data.status === "CONNECTED" ? "Discord authenticated successfully!" : (data.error || "Not logged in")}`);
+    } else {
+      alert(`Test failed: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Failed to test connection: ${err.message}`);
+  }
+};
+
+async function loadAccountMappings() {
+  try {
+    const res = await fetch("/api/account-mappings");
+    const data = await res.json();
+    if (data.success && Array.isArray(data.mappings)) {
+      state.accountMappings = data.mappings;
+      renderAccountMappings();
+      updateRoutingPreflightSummary();
+    }
+  } catch (err) {
+    console.warn("Could not load account mappings:", err);
+  }
+}
+
+function renderAccountMappings() {
+  const tbody = document.getElementById("mappingsTableBody");
+  if (!tbody) return;
+
+  const mappings = state.accountMappings || [];
+  if (mappings.length === 0) {
+    tbody.innerHTML = `
+      <tr class="empty-row">
+        <td colspan="4" class="text-muted">No account routing rules defined. In single-profile mode, all items route to the default profile.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = mappings.map(m => {
+    const prof = (state.discordProfiles || []).find(p => p.id === m.profileId);
+    const profileName = prof ? prof.name : (m.profileName || m.profileId);
+    let statusPill = '<span class="profile-status-pill status-not-connected"><span class="status-dot"></span>Not Connected</span>';
+    if (prof && prof.status === "CONNECTED") {
+      statusPill = '<span class="profile-status-pill status-connected"><span class="status-dot"></span>Connected</span>';
+    } else if (prof && prof.status === "CONNECTION_FAILED") {
+      statusPill = '<span class="profile-status-pill status-failed"><span class="status-dot"></span>Failed</span>';
+    }
+
+    return `
+      <tr>
+        <td><strong style="color: #c084fc;">${escapeHtml(m.account)}</strong></td>
+        <td><span class="profile-assigned-badge">${escapeHtml(profileName)}</span></td>
+        <td>${statusPill}</td>
+        <td style="text-align: center;">
+          <button class="btn btn-xs btn-outline" style="color: #f87171; padding: 2px 6px;" onclick="deleteAccountMapping('${escapeHtml(m.account)}')">✕</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function updateMappingProfileSelectOptions() {
+  const select = document.getElementById("selectMappingProfile");
+  if (!select) return;
+
+  const profiles = state.discordProfiles || [];
+  if (profiles.length === 0) {
+    select.innerHTML = '<option value="">-- No profiles configured --</option>';
+    return;
+  }
+
+  select.innerHTML = profiles.map(p => `
+    <option value="${p.id}">${escapeHtml(p.name)} (${p.status || 'NOT_CONNECTED'})</option>
   `).join("");
+}
+
+window.showAddMappingModal = function(prefilledAccount = "") {
+  const modal = document.getElementById("addMappingModal");
+  const accInput = document.getElementById("inputMappingAccount");
+  if (!modal) return;
+
+  updateMappingProfileSelectOptions();
+  if (accInput) {
+    accInput.value = prefilledAccount || "";
+  }
+
+  modal.style.display = "flex";
+  if (accInput && !prefilledAccount) accInput.focus();
+};
+
+window.closeAddMappingModal = function() {
+  const modal = document.getElementById("addMappingModal");
+  if (modal) modal.style.display = "none";
+};
+
+window.saveAccountMapping = async function() {
+  const account = document.getElementById("inputMappingAccount").value.trim();
+  const profileId = document.getElementById("selectMappingProfile").value;
+
+  if (!account) {
+    alert("Please enter the Published on Account handle.");
+    return;
+  }
+  if (!profileId) {
+    alert("Please select a Discord Profile.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/account-mappings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account, profileId })
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeAddMappingModal();
+      await loadAccountMappings();
+      renderDualQueueTable(state.loadedQueue);
+    } else {
+      alert(`Could not save mapping: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Failed to save mapping: ${err.message}`);
+  }
+};
+
+window.deleteAccountMapping = async function(account) {
+  if (!confirm(`Delete routing rule for "${account}"?`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/account-mappings/${encodeURIComponent(account)}`, {
+      method: "DELETE"
+    });
+    const data = await res.json();
+    if (data.success) {
+      await loadAccountMappings();
+      renderDualQueueTable(state.loadedQueue);
+    } else {
+      alert(`Could not delete mapping: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Failed to delete mapping: ${err.message}`);
+  }
+};
+
+window.discoverAccountsFromQueue = async function() {
+  if (!state.loadedQueue || state.loadedQueue.length === 0) {
+    alert("No clips loaded yet. Click 'Load Pending Clips' first.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/account-mappings/discover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queue: state.loadedQueue })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const { discovered, unmapped } = data;
+      if (discovered.length === 0) {
+        alert("No published account handles found in the loaded clips.");
+      } else if (unmapped.length === 0) {
+        alert(`Discovered ${discovered.length} account(s): ${discovered.join(", ")}.\n\nAll accounts are mapped to Discord profiles!`);
+      } else {
+        alert(`Discovered ${discovered.length} account(s): ${discovered.join(", ")}.\n\n${unmapped.length} account(s) are unmapped: ${unmapped.join(", ")}.`);
+        showAddMappingModal(unmapped[0]);
+      }
+    } else {
+      alert(`Discovery failed: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Discovery request failed: ${err.message}`);
+  }
+};
+
+async function updateRoutingPreflightSummary() {
+  const box = document.getElementById("routingPreflightSummary");
+  if (!box) return;
+
+  if (!state.loadedQueue || state.loadedQueue.length === 0) {
+    box.style.display = "none";
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/account-mappings/preflight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queue: state.loadedQueue })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      box.style.display = "none";
+      return;
+    }
+
+    const { summary, unmappedAccounts, disconnectedProfiles } = data;
+    box.style.display = "block";
+
+    let html = `
+      <div class="preflight-status-title">
+        <span class="status-dot" style="background: ${summary.safeToRun ? '#10b981' : '#f59e0b'};"></span>
+        <strong>Preflight Routing Check:</strong>
+        ${summary.safeToRun 
+          ? '<span style="color: #34d399;">Ready for execution</span>' 
+          : '<span style="color: #fbbf24;">Action required before starting</span>'}
+      </div>
+      <div class="preflight-stats-row">
+        <span>Eligible: <strong>${summary.eligibleCount}</strong></span>
+        <span>Mapped: <strong>${summary.mappedCount}</strong></span>
+        <span>Unmapped: <strong style="${unmappedAccounts.length > 0 ? 'color:#f87171;' : ''}">${unmappedAccounts.length}</strong></span>
+        <span>Disconnected: <strong style="${disconnectedProfiles.length > 0 ? 'color:#fbbf24;' : ''}">${disconnectedProfiles.length}</strong></span>
+      </div>
+    `;
+
+    if (unmappedAccounts.length > 0) {
+      html += `
+        <div class="preflight-warning-list" style="margin-top: 8px;">
+          <span style="color: #f87171; font-weight: 600;">⚠ Unmapped accounts detected:</span>
+          ${unmappedAccounts.map(acc => `
+            <span class="unmapped-account-tag">
+              ${escapeHtml(acc)}
+              <button class="btn btn-xs btn-primary" style="padding: 1px 6px; font-size: 10px; margin-left: 4px;" onclick="showAddMappingModal('${escapeHtml(acc)}')">+ Map</button>
+            </span>
+          `).join(" ")}
+        </div>
+      `;
+    }
+
+    if (disconnectedProfiles.length > 0) {
+      html += `
+        <div class="preflight-warning-list" style="margin-top: 8px;">
+          <span style="color: #fbbf24; font-weight: 600;">⚠ Disconnected profile(s) used by queue:</span>
+          ${disconnectedProfiles.map(p => `
+            <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">
+              ${escapeHtml(p.name)}
+              <button class="btn btn-xs btn-secondary" style="padding: 1px 6px; font-size: 10px; margin-left: 4px;" onclick="launchDiscordProfileBrowser('${p.id}')">Open</button>
+            </span>
+          `).join(" ")}
+        </div>
+      `;
+    }
+
+    box.innerHTML = html;
+  } catch (err) {
+    console.warn("Preflight check failed:", err);
+  }
 }
 
 window.startDualJob = async function() {
@@ -864,6 +1432,12 @@ function renderActiveJob(job) {
     `).join("");
     logsBox.scrollTop = logsBox.scrollHeight;
   }
+
+  if (job.summary && job.summary.reelsReport && job.summary.reelsReport.length > 0) {
+    renderReconciliationReport("activeJob", job.summary, job.status);
+  } else {
+    renderReconciliationReport("activeJob", null, null);
+  }
 }
 
 function appendLiveLog(logEntry) {
@@ -949,18 +1523,25 @@ window.openJobModal = async function(jobId) {
   const queue = job.queue || [];
 
   if (queue.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-muted" style="text-align:center">No individual clip logs stored.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-muted" style="text-align:center">No individual clip logs stored.</td></tr>`;
   } else {
     tbody.innerHTML = queue.map((c, i) => `
       <tr>
         <td>${i + 1}</td>
         <td class="font-mono" style="font-size:0.75rem;"><a href="${isKick ? (c.clipUrl || c.instagramLink) : c.instagramLink}" target="_blank" style="color:#60a5fa">${isKick ? (c.clipUrl || c.instagramLink) : c.instagramLink}</a></td>
-        <td>${isKick ? c.creator : `@${c.clipper}`}</td>
-        <td>${isKick ? `/${c.command}` : (c.editor ? `@${c.editor}` : '(empty)')}</td>
+        <td>${c.publishedOnAccount ? `<strong style="color:#c084fc">${escapeHtml(c.publishedOnAccount)}</strong>` : '<span class="text-muted">--</span>'}</td>
+        <td>${c.discordProfileName ? `<span class="profile-assigned-badge">${escapeHtml(c.discordProfileName)}</span>` : (c.discordProfileId ? escapeHtml(c.discordProfileId) : '<span class="text-muted">--</span>')}</td>
+        <td>${isKick ? escapeHtml(c.creator) : `@${escapeHtml(c.clipper || 'unknown')}`}</td>
         <td><span class="badge badge-${c.state}">${c.state}</span></td>
-        <td class="font-mono" style="font-size:0.75rem;">${c.discordId ? `#${c.discordId}` : (c.discordMessage || c.errorReason || '--')}</td>
+        <td class="font-mono" style="font-size:0.75rem;">${c.discordId ? `#${escapeHtml(c.discordId)}` : escapeHtml(c.discordMessage || c.errorReason || '--')}</td>
       </tr>
     `).join("");
+  }
+
+  if (job.summary && job.summary.reelsReport && job.summary.reelsReport.length > 0) {
+    renderReconciliationReport("modal", job.summary, job.status);
+  } else {
+    renderReconciliationReport("modal", null, null);
   }
 
   document.getElementById("jobDetailModal").style.display = "flex";
@@ -969,6 +1550,156 @@ window.openJobModal = async function(jobId) {
 window.closeJobModal = function() {
   document.getElementById("jobDetailModal").style.display = "none";
 };
+
+function renderReconciliationReport(prefix, summary, status) {
+  const container = document.getElementById(`${prefix}ReconciliationSection`);
+  if (!container) return;
+
+  if (!summary || !summary.reelsReport || summary.reelsReport.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+
+  // Badge
+  const badge = document.getElementById(`${prefix}ReconciliationBadge`);
+  if (badge) {
+    if (summary.allReconciled) {
+      badge.textContent = "✓ 100% Reconciled";
+      badge.className = "badge badge-success";
+    } else if (status === "COMPLETED_WITH_WARNINGS" || (summary.needsAttention && summary.needsAttention > 0)) {
+      badge.textContent = `⚠ Incomplete (${summary.needsAttention || 0} Need Attention)`;
+      badge.className = "badge badge-warning";
+    } else if (status === "FAILED") {
+      badge.textContent = "✕ Failed";
+      badge.className = "badge badge-danger";
+    } else {
+      badge.textContent = status || "Processed";
+      badge.className = "badge badge-muted";
+    }
+  }
+
+  // Stats Grid
+  const statsGrid = document.getElementById(`${prefix}ReconciliationStatsGrid`);
+  if (statsGrid) {
+    statsGrid.innerHTML = `
+      <div class="reconciliation-stat-box">
+        <span class="reconciliation-stat-value">${summary.total || 0}</span>
+        <span class="reconciliation-stat-label">Total Reels</span>
+      </div>
+      <div class="reconciliation-stat-box">
+        <span class="reconciliation-stat-value" style="color: #34d399;">${summary.discordSuccess || 0}</span>
+        <span class="reconciliation-stat-label">Discord Confirmed</span>
+      </div>
+      <div class="reconciliation-stat-box">
+        <span class="reconciliation-stat-value" style="color: #f87171;">${(summary.discordFailed || 0) + (summary.discordSkipped || 0)}</span>
+        <span class="reconciliation-stat-label">Discord Failed/Skip</span>
+      </div>
+      <div class="reconciliation-stat-box">
+        <span class="reconciliation-stat-value" style="color: #34d399;">${summary.cleanframeCompleted || 0}</span>
+        <span class="reconciliation-stat-label">Cleanframe Marked</span>
+      </div>
+      <div class="reconciliation-stat-box">
+        <span class="reconciliation-stat-value" style="color: ${(summary.cleanframeFailed || summary.cleanframeUnknown) ? '#fbbf24' : '#9ca3af'};">${(summary.cleanframeFailed || 0) + (summary.cleanframeUnknown || 0)}</span>
+        <span class="reconciliation-stat-label">Cleanframe Unverified</span>
+      </div>
+      <div class="reconciliation-stat-box">
+        <span class="reconciliation-stat-value" style="color: #34d399;">${summary.fullyCompleted || 0}</span>
+        <span class="reconciliation-stat-label">Overall Complete</span>
+      </div>
+      <div class="reconciliation-stat-box">
+        <span class="reconciliation-stat-value" style="color: ${(summary.needsAttention || 0) > 0 ? '#fbbf24' : '#9ca3af'};">${summary.needsAttention || 0}</span>
+        <span class="reconciliation-stat-label">Needs Attention</span>
+      </div>
+    `;
+  }
+
+  // Manual Actions Alert
+  const manualAlert = document.getElementById(`${prefix}ManualActionsAlert`);
+  if (manualAlert) {
+    if (summary.manualActions && summary.manualActions.length > 0) {
+      manualAlert.style.display = "block";
+      manualAlert.innerHTML = `
+        <strong>⚠ Manual Actions Required (${summary.manualActions.length}):</strong>
+        <ul style="margin: 4px 0 0 18px; padding: 0;">
+          ${summary.manualActions.map(a => `<li>${escapeHtml(a)}</li>`).join("")}
+        </ul>
+      `;
+    } else {
+      manualAlert.style.display = "none";
+      manualAlert.innerHTML = "";
+    }
+  }
+
+  // Table Body
+  const tbody = document.getElementById(`${prefix}ReconciliationTableBody`);
+  if (tbody) {
+    tbody.innerHTML = summary.reelsReport.map(r => {
+      let discordBadge = `<span class="badge badge-muted">${escapeHtml(r.discordResult)}</span>`;
+      if (r.discordResult === "SUCCESS") {
+        discordBadge = `<span class="badge badge-success">✓ SUCCESS</span>${r.discordId ? `<div style="font-size:0.7rem; color:#9ca3af; margin-top:2px;">#${escapeHtml(r.discordId)}</div>` : ""}`;
+      } else if (r.discordResult === "FAILED") {
+        discordBadge = `<span class="badge badge-danger">✕ FAILED</span>`;
+      } else if (r.discordResult === "UNKNOWN") {
+        discordBadge = `<span class="badge badge-warning">? UNKNOWN</span>`;
+      } else if (r.discordResult === "SKIPPED") {
+        discordBadge = `<span class="badge badge-muted">SKIPPED</span>`;
+      }
+
+      let cfBadge = `<span class="badge badge-muted">${escapeHtml(r.cleanframeMark)}</span>`;
+      if (r.cleanframeMark === "COMPLETED") {
+        cfBadge = `<span class="badge badge-success">✓ MARKED</span>${r.greenRowConfirmed ? `<span class="badge-green-row" style="margin-left:4px;">🟢 Green</span>` : ""}`;
+      } else if (r.cleanframeMark === "FAILED") {
+        cfBadge = `<span class="badge badge-danger">✕ FAILED</span>`;
+      } else if (r.cleanframeMark === "UNKNOWN") {
+        cfBadge = `<span class="badge badge-warning">? UNKNOWN</span>`;
+      } else if (r.cleanframeMark === "PENDING") {
+        cfBadge = `<span class="badge badge-muted">PENDING</span>`;
+      } else if (r.cleanframeMark === "NOT_REQUIRED") {
+        cfBadge = `<span class="badge badge-muted">NOT REQUIRED</span>`;
+      }
+
+      let overallBadge = `<span class="badge badge-${escapeHtml(r.overallResult)}">${escapeHtml(r.overallResult)}</span>`;
+      if (r.overallResult === "COMPLETE") {
+        overallBadge = `<span class="badge badge-COMPLETE">✓ COMPLETE</span>`;
+      } else if (r.overallResult === "NEEDS_ATTENTION") {
+        overallBadge = `<span class="badge badge-NEEDS_ATTENTION">⚠ NEEDS ATTENTION</span>`;
+      } else if (r.overallResult === "FAILED") {
+        overallBadge = `<span class="badge badge-danger">✕ FAILED</span>`;
+      } else if (r.overallResult === "SKIPPED") {
+        overallBadge = `<span class="badge badge-muted">SKIPPED</span>`;
+      }
+
+      const manualMsg = r.manualAction ? `<div style="font-size:0.7rem; color:#fbbf24; margin-top:2px;">${escapeHtml(r.manualAction)}</div>` : "";
+
+      return `
+        <tr>
+          <td>
+            <div class="font-mono" style="font-size:0.75rem;"><a href="${escapeHtml(r.reel)}" target="_blank" style="color:#60a5fa">${escapeHtml(r.reel)}</a></div>
+            <div style="font-size:0.7rem; color:#9ca3af;">${escapeHtml(r.sourceId || '')}</div>
+          </td>
+          <td>
+            ${r.publishedAccount && r.publishedAccount !== '--' ? `<strong style="color:#c084fc">@${escapeHtml(r.publishedAccount)}</strong>` : '<span class="text-muted">--</span>'}
+          </td>
+          <td>
+            <span class="profile-assigned-badge">${escapeHtml(r.discordProfile || 'default')}</span>
+          </td>
+          <td>
+            ${discordBadge}
+          </td>
+          <td>
+            ${cfBadge}
+          </td>
+          <td>
+            ${overallBadge}
+            ${manualMsg}
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+}
 
 function escapeHtml(str) {
   return String(str || "")

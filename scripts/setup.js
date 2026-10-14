@@ -91,7 +91,7 @@ if (!fs.existsSync(envFile)) {
   console.log("[PASS] .env file already exists (preserved)");
 }
 
-// 5. Ensure starter workflows.json exists
+// 5. Ensure starter data files exist
 const workflowsFile = path.join(ROOT_DIR, "data", "workflows.json");
 if (!fs.existsSync(workflowsFile)) {
   try {
@@ -102,6 +102,43 @@ if (!fs.existsSync(workflowsFile)) {
   }
 } else {
   console.log("[PASS] Verified data/workflows.json exists");
+}
+
+const profilesFile = path.join(ROOT_DIR, "data", "discord_profiles.json");
+if (!fs.existsSync(profilesFile)) {
+  try {
+    const defaultProfiles = [
+      {
+        id: "prof_default",
+        name: "Discord Profile 1",
+        mode: "dedicated",
+        port: 9222,
+        profileDir: null,
+        status: "NOT_CONNECTED",
+        statusMessage: "Profile initialized. Click Test or Open Browser to authenticate.",
+        lastTestedAt: null,
+        createdAt: new Date().toISOString()
+      }
+    ];
+    fs.writeFileSync(profilesFile, JSON.stringify(defaultProfiles, null, 2), "utf8");
+    console.log("[PASS] Initialized data/discord_profiles.json");
+  } catch (err) {
+    console.warn(`[WARN] Could not initialize discord_profiles.json: ${err.message}`);
+  }
+} else {
+  console.log("[PASS] Verified data/discord_profiles.json exists");
+}
+
+const mappingsFile = path.join(ROOT_DIR, "data", "account_mappings.json");
+if (!fs.existsSync(mappingsFile)) {
+  try {
+    fs.writeFileSync(mappingsFile, JSON.stringify({}, null, 2), "utf8");
+    console.log("[PASS] Initialized data/account_mappings.json");
+  } catch (err) {
+    console.warn(`[WARN] Could not initialize account_mappings.json: ${err.message}`);
+  }
+} else {
+  console.log("[PASS] Verified data/account_mappings.json exists");
 }
 
 // 6. Discover installed browsers

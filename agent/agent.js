@@ -124,6 +124,26 @@ async function handleBackendMessage(message) {
       break;
     }
 
+    case "TEST_DISCORD_PROFILE": {
+      try {
+        const testResult = await browserManager.testDiscordProfile(payload.profile || {}, payload.discordUrl);
+        send("TEST_DISCORD_PROFILE_RESULT", { correlationId, ...testResult });
+      } catch (err) {
+        send("TEST_DISCORD_PROFILE_RESULT", { correlationId, success: false, status: "CONNECTION_FAILED", message: err.message });
+      }
+      break;
+    }
+
+    case "LAUNCH_DISCORD_PROFILE": {
+      try {
+        const launchResult = await browserManager.launchProfileInteractive(payload.profile || {}, payload.discordUrl);
+        send("LAUNCH_DISCORD_PROFILE_RESULT", { correlationId, ...launchResult });
+      } catch (err) {
+        send("LAUNCH_DISCORD_PROFILE_RESULT", { correlationId, success: false, message: err.message });
+      }
+      break;
+    }
+
     case "LOAD_QUEUE_PREVIEW": {
       const { submissionType, browserConfig, websiteUrl } = payload;
       try {

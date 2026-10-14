@@ -209,20 +209,45 @@ Templates support dynamic Mustache-style interpolation:
 
 ---
 
-## 8. CLI Scripts & Verification
+## 8. Multi-Discord Profiles & Account-Based Routing
 
-| Command | Purpose |
-| :--- | :--- |
-| `npm start` | **Unified launch**: Starts Backend server and Local Agent together. |
-| `npm run setup` | Guided setup: verifies Node.js, creates directories, prepares `.env`, detects browsers. |
-| `npm run check` | Diagnostic health check: validates ports, storage, permissions, and browser status. |
-| `npm test` | **Comprehensive test suite**: Runs all 9 unit, integration, validation, batch, and E2E suites. |
-| `npm run web` | Starts only the web dashboard and backend server. |
-| `npm run agent` | Starts only the local desktop agent. |
+Clip Submitter V2 allows you to configure multiple named Discord profiles with isolated, persistent login sessions.
+
+- **Isolated Sessions**: Each profile maintains its own dedicated user data directory in `ClipSubmitterProfiles/profile_<id>`, allowing simultaneous or sequential execution across multiple Discord accounts without session crosstalk or repeated logins.
+- **Dynamic Account Routing**: Maps the Cleanframe **Published on Account** column (e.g., `@cubeflox`, `@kick.who_`) directly to a designated Discord profile.
+- **Safety Fallbacks**:
+  - Unmapped accounts are safely flagged as `BLOCKED_UNMAPPED` (`NEEDS_ATTENTION`) without blind retries or accidental submission to the wrong server.
+  - Disconnected profiles are flagged as `BLOCKED_DISCONNECTED` with clear remediation instructions.
 
 ---
 
-## 9. Security & Privacy Principles
+## 9. Cleanframe Submit-Mark Synchronization & Reconciliation
+
+Following Discord submissions, the Dual pipeline executes a mandatory Cleanframe reconciliation phase:
+
+1. **Returns to Cleanframe**: Navigates back to the All Clips table to synchronize the server state.
+2. **Submit Mark Execution**: Clicks the row Submit button for every confirmed Discord reel.
+3. **Green Row Verification**: Confirms that the row changes to `Submitted ✓`, visual green row styling (`bg-green`, `emerald`), or green checkmark icon.
+4. **Idempotency**: Rows already marked submitted are safely skipped without re-clicking.
+5. **Fail-Safe Marking**: Timeouts or ambiguous transitions are marked `UNKNOWN` (`NEEDS_ATTENTION`) with exact manual action instructions; never falsely marked complete.
+6. **Reconciliation Report**: Surfaces a 6-column report (`Reel`, `Published Account`, `Discord Profile`, `Discord Result`, `Cleanframe Mark`, `Overall Result`) in both the active job monitor and history modal.
+
+---
+
+## 10. CLI Scripts & Verification
+
+| Command | Platform | Purpose |
+| :--- | :--- | :--- |
+| `npm start` or `start.bat` / `./start.sh` | All | **Unified launch**: Starts Backend server and Local Agent together. |
+| `npm run setup` or `setup.bat` / `./setup.sh` | All | Guided setup: verifies Node.js, creates directories, prepares `.env`, detects browsers. |
+| `npm run check` | All | Diagnostic health check: validates ports, storage, permissions, and browser status. |
+| `npm test` | All | **Comprehensive test suite**: Runs all 11 unit, integration, validation, batch, and E2E suites. |
+| `npm run web` | All | Starts only the web dashboard and backend server. |
+| `npm run agent` | All | Starts only the local desktop agent. |
+
+---
+
+## 11. Security & Privacy Principles
 
 1. **Local-First Architecture**: All recordings, workflows, execution logs, and history remain strictly on your local computer. No telemetry, analytical beacons, or external cloud relays are used.
 2. **Dedicated Profiles**: Browser automations run exclusively in isolated profiles, ensuring your personal browsing history, passwords, and sessions are untouched.

@@ -9,6 +9,8 @@ package-lock.json.backup
 
 # Backups and archives
 backups/
+Clip-Submitter-V2-Release/
+*.zip
 *.bak
 *.backup
 
@@ -19,6 +21,7 @@ ClipSubmitterProfiles/
 # User runtime data & test artifacts
 data/history.json
 data/batch_jobs.json
+data/account_mappings.json
 data/test_*.json
 data/screenshots/*.png
 !data/screenshots/.gitkeep
